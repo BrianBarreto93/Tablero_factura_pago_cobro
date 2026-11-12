@@ -1,5 +1,9 @@
 # Cambios
 
+## 2026-11-12 · v1.2
+
+- La correlación con el NPS muestra solo el valor, en verde (fuerte), amarillo (moderada) o rojo (baja); la explicación va en el globo al pasar el cursor.
+
 ## 2026-11-12 · v1.1
 
 - El recorrido del cliente muestra, junto al n, la correlación de cada indicador con el NPS (Pearson, encuesta por encuesta).

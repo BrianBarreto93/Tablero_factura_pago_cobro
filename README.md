@@ -53,7 +53,8 @@ Hogar va en azul y Móvil en naranja; la paleta pasó el validador de color (sep
 - Unidad = encuesta (`ID_GESTION`). Una muestra se marca baja cuando n < 30.
 - r NPS (en el recorrido, junto al n) = correlación de Pearson entre la nota del indicador y la recomendación de 0 a 10,
   encuesta por encuesta, con los filtros activos. El cubo guarda n, Σx, Σy, Σx², Σy² y Σxy para poder calcularla con cualquier filtro.
-  Cobranza no pregunta NPS, así que ahí dice «no aplica».
+  Se muestra solo el valor, con color: verde si es fuerte (0,50 o más), amarillo si es moderada (0,30 a 0,49) y rojo si es baja
+  (menos de 0,30). La explicación sale al pasar el cursor. Cobranza no pregunta NPS, así que ahí aparece «—».
 - Meses: el filtro deja marcar uno o varios. Con varios, las cifras suman todas sus encuestas y la variación se compara contra
   los mismos N meses justo antes (si la selección es continua y existen esos meses).
 

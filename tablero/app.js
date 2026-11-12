@@ -485,13 +485,15 @@ function corr(k, a) {
   const vx = a['r_' + k + '_xx'] / n - mx * mx, vy = a['r_' + k + '_yy'] / n - my * my, cv = a['r_' + k + '_xy'] / n - mx * my;
   return vx > 0 && vy > 0 ? {r: cv / Math.sqrt(vx * vy), n} : null;
 }
-const fuerza = r => Math.abs(r) >= .5 ? 'fuerte' : Math.abs(r) >= .3 ? 'moderada' : Math.abs(r) >= .1 ? 'débil' : 'casi nula';
+// Fuerza: verde ≥ 0,5 (fuerte), amarillo 0,3–0,5 (moderada), rojo < 0,3 (baja)
+const fuerza = r => Math.abs(r) >= .5 ? 'fuerte' : Math.abs(r) >= .3 ? 'moderada' : 'baja';
 const nf2 = new Intl.NumberFormat('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 function corrTxt(k, a) {
-  if (IND[k].proc === COB) return ` · <span class="corr" ${tipAttr('Cobranza no pregunta recomendación (NPS), así que no hay correlación que calcular.')}>r NPS: no aplica</span>`;
+  if (IND[k].proc === COB) return ` · <span class="corr na" ${tipAttr('<div class="t">Correlación con el NPS</div>Cobranza no pregunta recomendación (NPS), así que no hay correlación que calcular.')}>—</span>`;
   const c = corr(k, a);
-  if (!c) return ` · <span class="corr">r NPS: —</span>`;
-  return ` · <span class="corr ${fuerza(c.r).replace(' ', '-')}" ${tipAttr(`<div class="t">Correlación con el NPS: ${nf2.format(c.r).replace('-', '−')}</div>Pearson entre la nota de este indicador y la recomendación de 0 a 10, encuesta por encuesta (${f0(c.n)} pares, con los filtros actuales).<br>Relación ${fuerza(c.r)}: ${c.r > 0 ? 'quien califica mejor este punto tiende a recomendar más' : 'sin relación positiva clara'}. Correlación no es causa.`)}>r NPS ${nf2.format(c.r).replace('-', '−')}</span>`;
+  if (!c) return ` · <span class="corr na" ${tipAttr('<div class="t">Correlación con el NPS</div>Menos de ' + NMIN + ' encuestas con ambas respuestas: no se calcula.')}>—</span>`;
+  const v = nf2.format(c.r).replace('-', '−'), f = fuerza(c.r);
+  return ` · <span class="corr ${f}" ${tipAttr(`<div class="t">Correlación con el NPS: ${v} (${f})</div>Pearson entre la nota de este indicador y la recomendación de 0 a 10, encuesta por encuesta (${f0(c.n)} pares, con los filtros actuales).<br>Verde ≥ 0,50 fuerte · amarillo 0,30 a 0,49 moderada · rojo < 0,30 baja.<br>${c.r >= .3 ? 'Quien califica mejor este punto tiende a recomendar más.' : 'Este punto se mueve poco junto con la recomendación.'} Correlación no es causa.`)}><span class="sr">Correlación con el NPS, ${f}: </span>${v}</span>`;
 }
 
 // ------------------------------------------------------------------ el recorrido (firma del Resumen)
@@ -515,7 +517,7 @@ function vRuta() {
   const con = (k, txt) => `<div class="conector" aria-hidden="true"><svg viewBox="0 0 28 16">${ICO[k]}</svg>${txt ? `<small>${txt}</small>` : ''}</div>`;
   return `<section class="panel"><header><h2 ${tipAttr('Todos los indicadores de la encuesta, en el orden en que el cliente vive el proceso. Respeta los filtros de mes, negocio, región, casa de cobro y canal; no el de proceso. Clic en un indicador para ver su detalle y comentarios.')}>El recorrido del cliente <span class="info">?</span></h2>
       <div class="leyenda">${NEG.map(e => `<span><i style="background:${CE[e]};border-radius:50%"></i>${e}</span>`).join('')}<span><i class="l" style="background:var(--ink);opacity:.55;width:2px;height:11px"></i>Total</span><span class="nota">Punto hueco = menos de ${NMIN} encuestas</span></div>
-      <p class="sub">${etqMeses(st.meses)} · ${st.negocio == null ? 'Hogar + Móvil' : NEG[st.negocio]}. La raya roja marca el indicador más bajo de cada etapa; «r NPS» es su correlación con la recomendación.</p></header>
+      <p class="sub">${etqMeses(st.meses)} · ${st.negocio == null ? 'Hogar + Móvil' : NEG[st.negocio]}. La raya roja marca el indicador más bajo de cada etapa. Junto al n, la correlación con el NPS (verde fuerte, amarillo moderada, rojo baja).</p></header>
     <div class="ruta">${etapa(ETAPAS[0], 0)}${con('flecha')}${etapa(ETAPAS[1], 1)}${con('flechaP', 'si no paga a tiempo')}${etapa(ETAPAS[2], 2)}</div></section>`;
 }
 
