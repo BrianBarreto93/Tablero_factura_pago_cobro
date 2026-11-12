@@ -1,13 +1,13 @@
 """Sube el tablero al host estático por SFTP LAN (mismo mecanismo que claro_tablero_sop_fm/etl/publicar.py).
 
-Reemplaza al tablero viejo de NPS Factura (encuestas 419/508) en la misma URL. Antes de subir:
+Reemplaza al tablero viejo de NPS Factura (encuestas 419/508) en la misma carpeta; la página es tablero_Factura.html. Antes de subir:
   1. no publica si el último datos.js trae algún chequeo de calidad en «error»;
   2. la primera vez respalda lo que haya en la carpeta remota en data/respaldo_publicado/AAAAMMDD_HHMMSS/;
   3. sube todo tablero/ y borra del remoto los archivos que ya no existen en el tablero nuevo;
   4. verifica HTTP 200.
 
 Uso: .venv/bin/python -m etl.publicar     (después de etl.construir y pytest)
-URL: https://servidor.lan.qwertylab.dev/umm/FACTURACION-PAGOS-COBROS/index.html
+URL: https://servidor.lan.qwertylab.dev/umm/FACTURACION-PAGOS-COBROS/tablero_Factura.html
 """
 import json
 import ssl
@@ -22,7 +22,7 @@ from etl.config import RAIZ
 
 ORIGEN = RAIZ / "tablero"
 BASE = "/incoming/compartido/proyectos_HTML/estaticos/UMM/FACTURACION-PAGOS-COBROS"
-URL = "https://servidor.lan.qwertylab.dev/umm/FACTURACION-PAGOS-COBROS/index.html"
+URL = "https://servidor.lan.qwertylab.dev/umm/FACTURACION-PAGOS-COBROS/tablero_Factura.html"
 RESPALDO = RAIZ / "data" / "respaldo_publicado"
 # Credenciales SFTP prestadas del .env de claro_vista_360 (igual que los tableros CR y Soporte-FM)
 ENV = dotenv_values("/opt/apps/claro_vista_360/.env")

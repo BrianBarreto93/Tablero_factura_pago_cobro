@@ -3,8 +3,8 @@
 Tablero HTML estático de la encuesta telefónica de experiencia de Factura y pago (Hogar y Móvil) y de Cobranza (Hogar y Móvil).
 La fuente es una sola tabla de Oracle, `INVITADO_15.TBL_ENC_FACTURA_PAGO_COBRO`, que se lee en modo de solo lectura.
 
-- Publicado: https://servidor.lan.qwertylab.dev/umm/FACTURACION-PAGOS-COBROS/index.html (reemplazó al tablero de NPS Factura de las encuestas 419/508).
-- Para abrirlo en el equipo basta con doble clic en `tablero/index.html`. Funciona sin servidor y sin internet; la descarga de la base sí necesita servidor.
+- Publicado: https://servidor.lan.qwertylab.dev/umm/FACTURACION-PAGOS-COBROS/tablero_Factura.html (reemplazó al tablero de NPS Factura de las encuestas 419/508).
+- Para abrirlo en el equipo basta con doble clic en `tablero/tablero_Factura.html`. Funciona sin servidor y sin internet; la descarga de la base sí necesita servidor.
 
 ## Corrida mensual
 

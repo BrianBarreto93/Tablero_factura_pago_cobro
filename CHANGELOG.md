@@ -7,5 +7,5 @@
 - Tablero con seis pestañas: Resumen (KPI, recorrido del cliente, tendencia, dolores y comentarios), Factura, Pago, Cobranza,
   Voces y Calidad. Tiene filtros de mes, proceso, negocio, región, casa de cobro y canal, que quedan en la URL.
 - Descarga de la base filtrada en Excel, CSV o Parquet.
-- Publicado en la URL del tablero de NPS Factura (419/508), que reemplaza. El remoto anterior quedó respaldado en `data/respaldo_publicado/`.
+- Publicado en la carpeta del tablero de NPS Factura (419/508), que reemplaza; la página se llama tablero_Factura.html. El remoto anterior quedó respaldado en `data/respaldo_publicado/`.
 - Octubre: NPS 35,1 (Hogar 29,7 y Móvil 40,5), CSAT factura 70,1 %, CSAT pago 86,5 %, CSAT información de cobranza 73,4 %.
