@@ -1,5 +1,12 @@
 # Cambios
 
+## 2026-11-12 · v1.1
+
+- El recorrido del cliente muestra, junto al n, la correlación de cada indicador con el NPS (Pearson, encuesta por encuesta).
+  En octubre la más alta es la satisfacción con la factura (0,63) y la más baja la seguridad al pagar (0,10).
+- El filtro de mes pasa a casillas: se pueden elegir varios meses, con atajos «Solo el último» y «Todos». La URL guarda la selección.
+- La página se llama `tablero_Factura.html` (antes `index.html`).
+
 ## 2026-11-12 · v1
 
 - ETL desde Oracle `INVITADO_15.TBL_ENC_FACTURA_PAGO_COBRO` (sep y oct 2026, 2.854 encuestas) con contrato de calidad,

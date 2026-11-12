@@ -5,6 +5,10 @@ import pandas as pd
 
 from etl.config import ESCALA_3, ESCALAS, MOTIVOS
 
+# Indicadores que se correlacionan con el NPS (solo factura y pago pregunta NPS). Se guardan sumas para la
+# correlación de Pearson: n, Σx, Σy, Σx², Σy², Σxy; así se puede calcular con cualquier combinación de filtros.
+CORR_NPS = ["fsat", "psat", "ces1", "ces2", "va", "seg", "rap"]
+
 DIMS = ["periodo", "semana", "proceso", "negocio", "region", "casa", "canal"]
 
 # Orden fijo de las medidas: el tablero las lee por nombre desde `medidas` en datos.js
@@ -14,6 +18,7 @@ MEDIDAS = (
     + ["va_si", "va_no", "prom_vasi", "det_vasi", "prom_vano", "det_vano"]
     + [f"{k}_{i}" for k in ESCALA_3 for i in range(1, 4)]
     + [f"mot_{k}" for k in MOTIVOS]          # encuestas con al menos un motivo registrado: base de los %
+    + [f"r_{k}_{m}" for k in CORR_NPS for m in ("n", "x", "y", "xx", "yy", "xy")]
 )
 
 
@@ -35,7 +40,12 @@ def _indicadoras(d):
             m[f"{k}_{i}"] = (d[k] == i).astype(int)
     for k in MOTIVOS:
         m[f"mot_{k}"] = d[f"mot_{k}"].map(bool).astype(int)
-    return m[MEDIDAS]
+    for k in CORR_NPS:
+        par = d.nps.notna() & d[k].notna()
+        x, y = d[k].where(par, 0), d.nps.where(par, 0)
+        m[f"r_{k}_n"], m[f"r_{k}_x"], m[f"r_{k}_y"] = par.astype(int), x, y
+        m[f"r_{k}_xx"], m[f"r_{k}_yy"], m[f"r_{k}_xy"] = x * x, y * y, x * y
+    return m[MEDIDAS].astype(int)
 
 
 # Por dolor: encuestas, promotores, detractores, NPS válidas, satisfacción principal (fsat o cinf) top-2 y válidas,

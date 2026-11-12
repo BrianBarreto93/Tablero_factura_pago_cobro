@@ -51,6 +51,11 @@ Hogar va en azul y Móvil en naranja; la paleta pasó el validador de color (sep
 - Valores acordes al plan = % que responde Sí sobre Sí + No.
 - Seguridad y rapidez al pagar = % que responde 2 o 3 en la escala de 1 a 3. El 1 es la respuesta mala.
 - Unidad = encuesta (`ID_GESTION`). Una muestra se marca baja cuando n < 30.
+- r NPS (en el recorrido, junto al n) = correlación de Pearson entre la nota del indicador y la recomendación de 0 a 10,
+  encuesta por encuesta, con los filtros activos. El cubo guarda n, Σx, Σy, Σx², Σy² y Σxy para poder calcularla con cualquier filtro.
+  Cobranza no pregunta NPS, así que ahí dice «no aplica».
+- Meses: el filtro deja marcar uno o varios. Con varios, las cifras suman todas sus encuestas y la variación se compara contra
+  los mismos N meses justo antes (si la selección es continua y existen esos meses).
 
 Qué es cada campo:
 

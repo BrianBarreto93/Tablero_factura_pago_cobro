@@ -83,11 +83,11 @@ const ETAPAS = [
 
 // ------------------------------------------------------------------ estado + URL
 const TABS = [['resumen', 'Resumen'], ['factura', 'Factura'], ['pago', 'Pago'], ['cobranza', 'Cobranza'], ['voz', 'Voces'], ['calidad', 'Calidad']];
-const st = {periodo: PERIODOS.length - 1, proceso: null, negocio: null, tab: 'resumen', evo: 'nps', modo: PERIODOS.length > 1 ? 'mes' : 'semana'};
+const st = {periodo: PERIODOS.length - 1, meses: [PERIODOS.length - 1], proceso: null, negocio: null, tab: 'resumen', evo: 'nps', modo: PERIODOS.length > 1 ? 'mes' : 'semana'};
 MULTI.forEach(([k]) => { st[k] = new Set(); });
 function leerHash() {
   const h = new URLSearchParams(location.hash.slice(1));
-  if (h.has('periodo')) { const i = PERIODOS.indexOf(h.get('periodo')); if (i >= 0) st.periodo = i; }
+  if (h.has('periodo')) { const ms = h.get('periodo').split('|').map(p => PERIODOS.indexOf(p)).filter(i => i >= 0); if (ms.length) fijarMeses(ms); }
   st.proceso = h.has('proceso') && PROC.includes(h.get('proceso')) ? PROC.indexOf(h.get('proceso')) : null;
   st.negocio = h.has('negocio') && NEG.includes(h.get('negocio')) ? NEG.indexOf(h.get('negocio')) : null;
   if (h.has('tab') && TABS.some(t => t[0] === h.get('tab'))) st.tab = h.get('tab');
@@ -95,7 +95,7 @@ function leerHash() {
 }
 function escribirHash() {
   const h = new URLSearchParams();
-  h.set('periodo', PERIODOS[st.periodo]);
+  h.set('periodo', st.meses.map(i => PERIODOS[i]).join('|'));
   if (st.proceso != null) h.set('proceso', PROC[st.proceso]);
   if (st.negocio != null) h.set('negocio', NEG[st.negocio]);
   for (const [k] of MULTI) if (st[k].size) h.set(k, [...st[k]].map(i => V[k][i]).join('|'));
@@ -105,10 +105,24 @@ function escribirHash() {
 
 // ------------------------------------------------------------------ motor
 // o.periodo / o.proceso / o.negocio: null = todos, undefined = el del estado. o.ignorar: filtro múltiple que no se aplica.
+// Meses elegidos (casilla múltiple). st.periodo = el más reciente de la selección: referencia para calidad y año corrido.
+function fijarMeses(ms) {
+  st.meses = [...new Set(ms)].sort((a, b) => a - b);
+  st.periodo = ultimo(st.meses);
+}
+// Ventana anterior para comparar: los mismos N meses justo antes de la selección (si la selección es continua)
+function mesesAnteriores() {
+  const m = st.meses, n = m.length, ini = m[0];
+  if (ultimo(m) - ini !== n - 1 || ini - n < 0) return null;
+  return Array.from({length: n}, (_, i) => ini - n + i);
+}
+const etqMeses = ms => ms.length === 1 ? mesL(PERIODOS[ms[0]]) : ultimo(ms) - ms[0] === ms.length - 1 ? `${mesC(PERIODOS[ms[0]])} a ${mesC(PERIODOS[ultimo(ms)])}` : ms.map(i => mesC(PERIODOS[i])).join(', ');
+const etqCorta = ms => ms.length === 1 ? mesC(PERIODOS[ms[0]]) : etqMeses(ms);
+// o.periodo: null = todos, número = un mes, arreglo = esos meses; si no viene, los meses elegidos
 function pasa(r, o) {
   o = o || {};
-  const per = 'periodo' in o ? o.periodo : st.periodo, pro = 'proceso' in o ? o.proceso : st.proceso, neg = 'negocio' in o ? o.negocio : st.negocio;
-  if (per != null && r[0] !== per) return false;
+  const per = 'periodo' in o ? o.periodo : st.meses, pro = 'proceso' in o ? o.proceso : st.proceso, neg = 'negocio' in o ? o.negocio : st.negocio;
+  if (per != null && (Array.isArray(per) ? !per.includes(r[0]) : r[0] !== per)) return false;
   if (pro != null && r[DI.proceso] !== pro) return false;
   if (neg != null && r[DI.negocio] !== neg) return false;
   for (const [k] of MULTI) if (k !== o.ignorar && st[k].size && !st[k].has(r[DI[k]])) return false;
@@ -128,7 +142,7 @@ function porDim(idx, dim) {
 const negs = () => st.negocio == null ? NEG.map((_, i) => i) : [st.negocio];
 const alcance = () => [st.proceso == null ? 'Factura, pago y cobranza' : PROC[st.proceso], st.negocio == null ? 'Hogar + Móvil' : NEG[st.negocio]].join(' · ');
 function serie(k, modo, neg) {
-  const idx = filas({periodo: modo === 'mes' ? null : st.periodo, negocio: neg});
+  const idx = filas(modo === 'mes' ? {periodo: null, negocio: neg} : {negocio: neg});
   return porDim(idx, modo === 'mes' ? 'periodo' : 'semana')
     .map(g => ({x: g.v, et: modo === 'mes' ? mesC(V.periodo[g.v]) : semC(V.semana[g.v]), r: IND[k].calc(g.a)}))
     .filter(p => p.r).sort((a, b) => a.x - b.x);
@@ -250,11 +264,20 @@ const bajo = r => r && r.n < NMIN ? ' <span class="bajo">muestra baja</span>' : 
 const ctrl = document.getElementById('ctrl'), barF = document.getElementById('filtros');
 function pintarCtrl() {
   ctrl.innerHTML = `
-    <label class="sr" for="f-per">Periodo</label>
-    <select class="sel" id="f-per">${PERIODOS.map((p, i) => `<option value="${i}"${i === st.periodo ? ' selected' : ''}>${mesL(p)}</option>`).join('')}</select>
+    <div class="mes-f" id="f-per"><button type="button" class="sel" aria-haspopup="true" aria-expanded="false" title="Elegir uno o varios meses">${etqMeses(st.meses)}${st.meses.length > 1 ? ` <b>· ${st.meses.length} meses</b>` : ''}</button>
+      <div class="pop" hidden role="group" aria-label="Meses"><div class="atajos"><button type="button" data-m="ult">Solo el último</button><button type="button" data-m="todos">Todos</button></div>
+        ${PERIODOS.map((p, i) => i).reverse().map(i => `<label class="op"><input type="checkbox" value="${i}"${st.meses.includes(i) ? ' checked' : ''}><span>${mesL(PERIODOS[i])}</span><small>${f0(D.periodos[PERIODOS[i]].n)}</small></label>`).join('')}
+        <p class="nota" style="margin:6px 8px 2px">Con varios meses, las cifras suman todas sus encuestas y se comparan con los mismos meses justo antes.</p></div></div>
     <div class="seg" role="group" aria-label="Proceso" id="f-pro"><button type="button" data-v="" aria-pressed="${st.proceso == null}">Todo</button>${PROC.map((e, i) => `<button type="button" data-v="${i}" aria-pressed="${st.proceso === i}">${e}</button>`).join('')}</div>
     <div class="seg" role="group" aria-label="Negocio" id="f-neg"><button type="button" data-v="" aria-pressed="${st.negocio == null}">Ambos</button>${NEG.map((e, i) => `<button type="button" data-v="${i}" aria-pressed="${st.negocio === i}"><i style="background:${CE[e]}"></i>${e}</button>`).join('')}</div>`;
-  ctrl.querySelector('#f-per').onchange = e => { st.periodo = +e.target.value; refrescar(); };
+  const fp_ = ctrl.querySelector('#f-per'), bp = fp_.querySelector('button.sel'), pp = fp_.querySelector('.pop');
+  bp.onclick = e => { e.stopPropagation(); const si = pp.hidden; document.querySelectorAll('.pop:not([hidden])').forEach(x => { x.hidden = true; }); pp.hidden = !si; bp.setAttribute('aria-expanded', si); };
+  fp_.addEventListener('keydown', e => { if (e.key === 'Escape') { pp.hidden = true; bp.setAttribute('aria-expanded', false); bp.focus(); } });
+  pp.querySelectorAll('input[type=checkbox]').forEach(c => { c.onchange = () => {
+    const ms = new Set(st.meses); if (c.checked) ms.add(+c.value); else ms.delete(+c.value);
+    if (!ms.size) { c.checked = true; return; }   // siempre queda al menos un mes
+    fijarMeses([...ms]); refrescar({mantener: '__mes'}); }; });
+  pp.querySelectorAll('[data-m]').forEach(b => { b.onclick = () => { fijarMeses(b.dataset.m === 'ult' ? [PERIODOS.length - 1] : PERIODOS.map((_, i) => i)); refrescar({mantener: '__mes'}); }; });
   ctrl.querySelectorAll('#f-pro button').forEach(b => { b.onclick = () => { st.proceso = b.dataset.v === '' ? null : +b.dataset.v; refrescar(); }; });
   ctrl.querySelectorAll('#f-neg button').forEach(b => { b.onclick = () => { st.negocio = b.dataset.v === '' ? null : +b.dataset.v; refrescar(); }; });
 }
@@ -280,6 +303,7 @@ function montarPop(caja) {
     const b = pop.querySelector('.buscar'); if (b) b.oninput = () => { const q = norm(b.value); pop.querySelectorAll('.op').forEach(o => { o.hidden = !norm(o.textContent).includes(q); }); };
   }
 }
+document.addEventListener('click', e => { if (!e.target.closest('.mes-f')) { const mp = document.querySelector('.mes-f .pop'); if (mp && !mp.hidden) { mp.hidden = true; mp.previousElementSibling.setAttribute('aria-expanded', false); } } });
 document.addEventListener('click', e => { if (!e.target.closest('.pill-f')) document.querySelectorAll('.pill-f .pop:not([hidden])').forEach(p => { p.hidden = true; p.previousElementSibling.setAttribute('aria-expanded', false); }); });
 function alternar(dim, i) {
   if (dim === 'negocio') { st.negocio = st.negocio === i ? null : i; refrescar(); return; }
@@ -307,7 +331,7 @@ function irA(k) { st.tab = k; pintarNav(); pintarTab(); escribirHash(); const t 
 // ------------------------------------------------------------------ piezas
 function delta(k, act, ant, etq) {
   if (!act) return '';
-  if (!ant) return `<span class="nota">sin mes anterior</span>`;
+  if (!ant) return `<span class="nota">${st.meses.length > 1 ? 'sin un periodo anterior igual para comparar' : 'sin mes anterior'}</span>`;
   const d = act.v - ant.v, c = Math.abs(d) < .05 ? 'igual' : d > 0 ? 'mejora' : 'empeora';
   return `<span class="delta ${c}" ${tipAttr(`${etq}: ${fmt(k, ant)} · n ${f0(ant.n)}`)}>${c === 'igual' ? '■' : d > 0 ? '▲' : '▼'} ${fpp(d)} ${unidad(k)}<span class="sr"> ${c === 'mejora' ? 'mejora' : c === 'empeora' ? 'empeora' : 'igual'}</span></span><span class="nota">vs ${etq}</span>`;
 }
@@ -316,7 +340,7 @@ function spark(k) {
   if (!lines.length) return '';
   const W = 200, H = 34, all = [].concat.apply([], lines.map(s => s.pts.map(p => p.r.v))), lo = Math.min.apply(null, all), hi = Math.max.apply(null, all), rg = hi - lo || 1, n = PERIODOS.length;
   const X = i => 3 + (W - 6) * i / Math.max(1, n - 1);
-  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><line x1="${X(st.periodo)}" x2="${X(st.periodo)}" y1="0" y2="${H}" stroke="var(--eje)" stroke-dasharray="2 3" vector-effect="non-scaling-stroke"/>${lines.map(s =>
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${st.meses.map(m => `<line x1="${X(m)}" x2="${X(m)}" y1="0" y2="${H}" stroke="var(--eje)" stroke-dasharray="2 3" vector-effect="non-scaling-stroke"/>`).join('')}${lines.map(s =>
     `<polyline fill="none" stroke="${CE[NEG[s.e]]}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" points="${s.pts.map(p => X(p.x) + ',' + (3 + (H - 6) * (1 - (p.r.v - lo) / rg))).join(' ')}"/>`).join('')}</svg>`;
 }
 // Pesa: riel de min a max con un punto por negocio (hueco si la muestra es baja) y una marca del total
@@ -347,10 +371,10 @@ function dibujarLineas(raiz) {
     const X = i => xs.length === 1 ? (L + W - R) / 2 : L + (W - L - R) * i / (xs.length - 1), Y = v => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
     const paso = hi - lo > 60 ? 20 : 10, cada = Math.max(1, Math.ceil(xs.length / Math.max(2, Math.floor((W - L - R) / 52))));
     let s = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">`;
-    if (modo === 'mes' && xs.includes(st.periodo)) s += `<rect x="${X(xs.indexOf(st.periodo)) - 16}" y="${T - 6}" width="32" height="${H - T - B + 12}" rx="10" fill="var(--panel-2)"/>`;
+    if (modo === 'mes') st.meses.filter(m => xs.includes(m)).forEach(m => { s += `<rect x="${X(xs.indexOf(m)) - 16}" y="${T - 6}" width="32" height="${H - T - B + 12}" rx="10" fill="var(--panel-2)"/>`; });
     for (let v = Math.ceil(lo / paso) * paso; v <= hi; v += paso) s += `<line class="grid" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L - 8}" y="${Y(v) + 4}" text-anchor="end">${f0(v)}</text>`;
     if (lo < 0 && hi > 0) s += `<line class="eje" x1="${L}" x2="${W - R}" y1="${Y(0)}" y2="${Y(0)}"/>`;
-    xs.forEach((x, i) => { if (i % cada === 0 || i === xs.length - 1) s += `<text x="${X(i)}" y="${H - 6}" text-anchor="middle"${modo === 'mes' && x === st.periodo ? ' style="fill:var(--ink);font-weight:800"' : ''}>${esc(etq(x))}</text>`; });
+    xs.forEach((x, i) => { if (i % cada === 0 || i === xs.length - 1) s += `<text x="${X(i)}" y="${H - 6}" text-anchor="middle"${modo === 'mes' && st.meses.includes(x) ? ' style="fill:var(--ink);font-weight:800"' : ''}>${esc(etq(x))}</text>`; });
     const etqs = [];
     for (const {e, pts} of S) {
       const c = CE[e], pos = pts.map(p => [X(xs.indexOf(p.x)), Y(p.r.v), p]);
@@ -452,10 +476,28 @@ function montarRanking(raiz) {
   });
 }
 
+// ------------------------------------------------------------------ correlación con el NPS
+// Pearson entre la nota del indicador y la recomendación 0–10, encuesta por encuesta (solo factura y pago pregunta NPS)
+function corr(k, a) {
+  const n = a['r_' + k + '_n'];
+  if (n == null || n < NMIN) return null;
+  const mx = a['r_' + k + '_x'] / n, my = a['r_' + k + '_y'] / n;
+  const vx = a['r_' + k + '_xx'] / n - mx * mx, vy = a['r_' + k + '_yy'] / n - my * my, cv = a['r_' + k + '_xy'] / n - mx * my;
+  return vx > 0 && vy > 0 ? {r: cv / Math.sqrt(vx * vy), n} : null;
+}
+const fuerza = r => Math.abs(r) >= .5 ? 'fuerte' : Math.abs(r) >= .3 ? 'moderada' : Math.abs(r) >= .1 ? 'débil' : 'casi nula';
+const nf2 = new Intl.NumberFormat('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+function corrTxt(k, a) {
+  if (IND[k].proc === COB) return ` · <span class="corr" ${tipAttr('Cobranza no pregunta recomendación (NPS), así que no hay correlación que calcular.')}>r NPS: no aplica</span>`;
+  const c = corr(k, a);
+  if (!c) return ` · <span class="corr">r NPS: —</span>`;
+  return ` · <span class="corr ${fuerza(c.r).replace(' ', '-')}" ${tipAttr(`<div class="t">Correlación con el NPS: ${nf2.format(c.r).replace('-', '−')}</div>Pearson entre la nota de este indicador y la recomendación de 0 a 10, encuesta por encuesta (${f0(c.n)} pares, con los filtros actuales).<br>Relación ${fuerza(c.r)}: ${c.r > 0 ? 'quien califica mejor este punto tiende a recomendar más' : 'sin relación positiva clara'}. Correlación no es causa.`)}>r NPS ${nf2.format(c.r).replace('-', '−')}</span>`;
+}
+
 // ------------------------------------------------------------------ el recorrido (firma del Resumen)
 function vRuta() {
   const o = {proceso: null}, a = sumar(filas(o)), pn = porNeg(o);
-  const ant = st.periodo > 0 ? sumar(filas({proceso: null, periodo: st.periodo - 1})) : null, etA = st.periodo > 0 ? mesC(PERIODOS[st.periodo - 1]) : '';
+  const ma = mesesAnteriores(), ant = ma ? sumar(filas({proceso: null, periodo: ma})) : null, etA = ma ? etqCorta(ma) : '';
   const etapa = (E, i) => {
     const rs = E.ks.map(k => ({k, r: IND[k].calc(a)})), ok = rs.filter(x => x.r && x.r.n >= NMIN);
     const debil = ok.length > 1 ? ok.reduce((m, x) => x.r.v < m.r.v ? x : m).k : null;
@@ -463,7 +505,7 @@ function vRuta() {
       if (!r) return '';
       const pr = ant ? IND[k].calc(ant) : null;
       return `<button type="button" class="paso${k === debil ? ' debil' : ''}" data-cajon="${k}" aria-label="${IND[k].nombre}: ${fmt(k, r)}. Ver detalle">
-        <span class="nom">${esc(IND[k].nombre)}<small>n ${f0(r.n)}${r.n < NMIN ? ' · muestra baja' : ''}</small></span>
+        <span class="nom">${esc(IND[k].nombre)}<small>n ${f0(r.n)}${r.n < NMIN ? ' · muestra baja' : ''}${corrTxt(k, a)}</small></span>
         <span class="val" ${tipAttr(tipInd(k, r))}>${fmtGrande(k, r)}</span>
         ${pesa(k, pn.map(x => IND[k].calc(x)), r)}
         <span class="pie-p">${delta(k, r, pr, etA)}${k === debil ? '<span class="tag">la más baja de la etapa</span>' : ''}</span></button>`;
@@ -473,7 +515,7 @@ function vRuta() {
   const con = (k, txt) => `<div class="conector" aria-hidden="true"><svg viewBox="0 0 28 16">${ICO[k]}</svg>${txt ? `<small>${txt}</small>` : ''}</div>`;
   return `<section class="panel"><header><h2 ${tipAttr('Todos los indicadores de la encuesta, en el orden en que el cliente vive el proceso. Respeta los filtros de mes, negocio, región, casa de cobro y canal; no el de proceso. Clic en un indicador para ver su detalle y comentarios.')}>El recorrido del cliente <span class="info">?</span></h2>
       <div class="leyenda">${NEG.map(e => `<span><i style="background:${CE[e]};border-radius:50%"></i>${e}</span>`).join('')}<span><i class="l" style="background:var(--ink);opacity:.55;width:2px;height:11px"></i>Total</span><span class="nota">Punto hueco = menos de ${NMIN} encuestas</span></div>
-      <p class="sub">${mesL(PERIODOS[st.periodo])} · ${st.negocio == null ? 'Hogar + Móvil' : NEG[st.negocio]}. La raya roja marca el indicador más bajo de cada etapa.</p></header>
+      <p class="sub">${etqMeses(st.meses)} · ${st.negocio == null ? 'Hogar + Móvil' : NEG[st.negocio]}. La raya roja marca el indicador más bajo de cada etapa; «r NPS» es su correlación con la recomendación.</p></header>
     <div class="ruta">${etapa(ETAPAS[0], 0)}${con('flecha')}${etapa(ETAPAS[1], 1)}${con('flechaP', 'si no paga a tiempo')}${etapa(ETAPAS[2], 2)}</div></section>`;
 }
 
@@ -500,7 +542,7 @@ const dolEst = {rango: 'mes', proc: FP};
 function filasDolor() {
   const o = {proceso: dolEst.proc};
   if (dolEst.rango === 'mes') return filas(o);
-  const anio = PERIODOS[st.periodo].slice(0, 4);
+  const anio = PERIODOS[st.periodo].slice(0, 4);   // año corrido hasta el último mes elegido
   return filas(Object.assign(o, {periodo: null})).filter(i => { const p = PERIODOS[D.cubo[i][0]]; return p.slice(0, 4) === anio && D.cubo[i][0] <= st.periodo; });
 }
 const npsDe = (v, prom, det) => v ? (prom - det) / v * 100 : null, pctDe = (ok, v) => v ? ok / v * 100 : null;
@@ -537,7 +579,7 @@ function vDolores() {
   if (st.proceso != null) dolEst.proc = st.proceso;
   const fp = dolEst.proc === FP, idx = filasDolor(), r = calcDolores(idx), tot = r.tot, alguno = r.alguno;
   const n1 = fp ? 'NPS' : 'CSAT información', n2 = fp ? 'CSAT factura' : 'CSAT trato', u1 = fp ? 'pts' : 'pp', min1 = fp ? -100 : 0, s1 = fp ? '' : ' %';
-  const rango = dolEst.rango === 'mes' ? mesL(PERIODOS[st.periodo]) : `${mesC(PERIODOS[0]).split('-')[0]} a ${MES[+PERIODOS[st.periodo].slice(4) - 1]} ${PERIODOS[st.periodo].slice(0, 4)}`;
+  const rango = dolEst.rango === 'mes' ? etqMeses(st.meses) : `${mesC(PERIODOS[0]).split('-')[0]} a ${MES[+PERIODOS[st.periodo].slice(4) - 1]} ${PERIODOS[st.periodo].slice(0, 4)}`;
   const orden = r.dol.filter(x => x.n).sort((a, b) => (b.n >= NMIN) - (a.n >= NMIN) || b.pts - a.pts);
   const maxPts = Math.max.apply(null, [1].concat(orden.filter(x => x.n >= NMIN).map(x => x.pts)));
   const X = v => (v - min1) / (100 - min1) * 100;
@@ -570,7 +612,7 @@ function vDolores() {
   }).join('');
   const segProc = st.proceso == null ? `<div class="seg" role="group" aria-label="Proceso de los dolores" id="dol-p">${[FP, COB].map(p => `<button type="button" data-p="${p}" aria-pressed="${dolEst.proc === p}">${PROC[p]}</button>`).join('')}</div>` : '';
   return `<section class="panel dolores" id="dolores"><header><h2>Dolores del cliente</h2>
-      <div class="herr">${segProc}<div class="seg" role="group" aria-label="Periodo de los dolores" id="dol-r"><button type="button" data-r="mes" aria-pressed="${dolEst.rango === 'mes'}">Mes</button><button type="button" data-r="acum" aria-pressed="${dolEst.rango === 'acum'}">Año corrido</button></div></div>
+      <div class="herr">${segProc}<div class="seg" role="group" aria-label="Periodo de los dolores" id="dol-r"><button type="button" data-r="mes" aria-pressed="${dolEst.rango === 'mes'}">${st.meses.length > 1 ? 'Meses elegidos' : 'Mes'}</button><button type="button" data-r="acum" aria-pressed="${dolEst.rango === 'acum'}">Año corrido</button></div></div>
       <p class="sub">${PROC[dolEst.proc]} · ${st.negocio == null ? 'Hogar + Móvil' : NEG[st.negocio]} · ${rango}. Lo que responden y cuentan los clientes, cruzado con su ${n1} y su ${n2}. Arriba, el dolor que más ${u1} de ${n1} le quita a la nota.</p></header>
     ${cab}
     <div class="dol-ley" aria-hidden="true"><span></span><span>Lo vive</span><span><i class="pt con"></i>Con el dolor <i class="pt sin"></i>Sin el dolor <i class="ref"></i>Total · ${n1}</span><span>${n2}</span><span>${n1} que recupera</span></div>
@@ -585,8 +627,8 @@ const grNeg = (o, total) => {
   return st.negocio == null && total !== false ? g.concat([{nombre: 'Total', a: sumar(filas(Object.assign({}, o || {}, {negocio: null})))}]) : g;
 };
 function kpiCards(ks) {
-  const a = sumar(filas()), ant = st.periodo > 0 ? st.periodo - 1 : null, aAnt = ant != null ? sumar(filas({periodo: ant})) : null, etA = ant != null ? mesC(PERIODOS[ant]) : '';
-  return `<section class="kpis${ks.length % 2 ? ' impar' : ''}" style="--nk:${ks.length - 1}" aria-label="Indicadores de ${mesL(PERIODOS[st.periodo])}">${ks.map((k, i) => {
+  const a = sumar(filas()), ant = mesesAnteriores(), aAnt = ant ? sumar(filas({periodo: ant})) : null, etA = ant ? etqCorta(ant) : '';
+  return `<section class="kpis${ks.length % 2 ? ' impar' : ''}" style="--nk:${ks.length - 1}" aria-label="Indicadores de ${etqMeses(st.meses)}">${ks.map((k, i) => {
     const r = IND[k].calc(a), pr = aAnt ? IND[k].calc(aAnt) : null;
     return `<article class="kpi${i === 0 ? ' estrella' : ''}">${i === 0 ? '<span class="glow"></span>' : ''}
       <div class="et">${IND[k].corto} <span class="info" tabindex="0" ${tipAttr(esc(IND[k].nombre + '. ' + IND[k].def))}>?</span></div>
@@ -618,7 +660,7 @@ function vResumen(p) {
     ${kpiCards(ks)}
     ${vRuta()}
     <div class="g g-2-1" style="min-height:0">
-      <section class="panel"><header><h2>${IND[st.evo].corto} · ${st.modo === 'mes' ? 'mes a mes' : 'semana a semana, ' + mesL(PERIODOS[st.periodo])}</h2>
+      <section class="panel"><header><h2>${IND[st.evo].corto} · ${st.modo === 'mes' ? 'mes a mes' : 'semana a semana, ' + etqMeses(st.meses)}</h2>
         <div class="herr"><label class="sr" for="evo-k">Indicador</label><select class="sel" id="evo-k">${ETAPAS.map(E => { const ks = E.ks.filter(k => evoKs.includes(k)); return ks.length ? `<optgroup label="${E.t}">${ks.map(k => `<option value="${k}"${st.evo === k ? ' selected' : ''}>${IND[k].nombre}</option>`).join('')}</optgroup>` : ''; }).join('')}${evoKs.includes('nps') ? `<option value="nps"${st.evo === 'nps' ? ' selected' : ''}>NPS · recomendación</option>` : ''}</select>
         ${PERIODOS.length > 1 ? `<div class="seg" role="group" aria-label="Agrupar" id="evo-m"><button type="button" data-m="mes" aria-pressed="${st.modo === 'mes'}">Mes</button><button type="button" data-m="semana" aria-pressed="${st.modo === 'semana'}">Semana</button></div>` : ''}</div>
         <div class="leyenda" style="flex-basis:100%">${negs().map(e => `<span><i class="l" style="background:${CE[NEG[e]]}"></i>${NEG[e]}</span>`).join('')}<span class="nota">Punto hueco = menos de ${NMIN} encuestas</span>${tablaPH('evo')}</div></header>
@@ -673,7 +715,7 @@ function vVoz(p) {
   const ej = C ? ejemplos(exEst.lente || null, exEst.ver, norm(exEst.q)) : null;
   const grupos = [['Factura y pago', ['det', 'pro', 'fmal', 'fbien', 'fdif', 'ffac', 'vano', 'vasi', 'pmal', 'pbien', 'pdif', 'pfac', 'seg1', 'seg23', 'rap1', 'rap23']], ['Cobranza', ['imal', 'ibien', 'tmal', 'tbien', 'cnoc', 'cclar']]];
   p.innerHTML = `
-    <section class="panel"><header><h2>Explorador de comentarios</h2><span class="nota">${ej ? f0(ej.total) + ' comentarios' : 'Cargando…'}</span><p class="sub">${alcance()} · ${mesL(PERIODOS[st.periodo])}. Los comentarios los transcribe el analista durante la llamada; los datos personales van tapados.</p></header>
+    <section class="panel"><header><h2>Explorador de comentarios</h2><span class="nota">${ej ? f0(ej.total) + ' comentarios' : 'Cargando…'}</span><p class="sub">${alcance()} · ${etqMeses(st.meses)}. Los comentarios los transcribe el analista durante la llamada; los datos personales van tapados.</p></header>
       <div class="ex-herr"><input type="search" id="ex-q" placeholder="Buscar: factura, llamadas, Nequi, aumento…" value="${esc(exEst.q)}" aria-label="Buscar en comentarios">
         <label class="sr" for="ex-l">Tipo de comentario</label><select class="sel" id="ex-l"><option value="">Todos los comentarios</option>${grupos.map(([g, ls]) => `<optgroup label="${g}">${ls.map(l => `<option value="${l}"${exEst.lente === l ? ' selected' : ''}>${LENTES[l].t}</option>`).join('')}</optgroup>`).join('')}</select></div>
       <div class="ex">${ej == null ? Array(6).fill('<div class="esqueleto"></div>').join('') : ej.items.map(v => tarjeta(v, exEst.q)).join('') || '<p class="vacio">Sin comentarios</p>'}</div>
@@ -694,7 +736,7 @@ function vCalidad(p) {
         <section class="panel"><header><h2>Definiciones</h2></header><dl class="defs">${KS.map(k => `<dt>${IND[k].corto}</dt><dd>${esc(IND[k].nombre)}. ${esc(IND[k].def)}</dd>`).join('')}
           <dt>Mes</dt><dd>Mes de FECHA_GESTION, el día de la llamada. La columna MES no trae el año.</dd><dt>Unidad</dt><dd>La encuesta (ID_GESTION).</dd><dt>Negocio</dt><dd>Fijo = Hogar; Móvil = Móvil.</dd><dt>IC 95 %</dt><dd>Margen de error por muestreo. Diferencias menores pueden ser ruido.</dd>
           <dt>Supuestos</dt><dd>La tabla no dice qué pregunta es cada campo. Las etiquetas de CSAT, CSAT1, CES1 y CES2 y el umbral 2–3 de seguridad y rapidez se dedujeron de los motivos que acompañan a cada campo; falta confirmarlos con el cuestionario.</dd></dl></section></div></div>`;
-  p.querySelectorAll('.meses button').forEach(b => { b.onclick = () => { st.periodo = +b.dataset.i; refrescar(); }; });
+  p.querySelectorAll('.meses button').forEach(b => { b.onclick = () => { fijarMeses([+b.dataset.i]); refrescar(); }; });
 }
 const VISTAS = {resumen: vResumen, factura: vFactura, pago: vPago, cobranza: vCobranza, voz: vVoz, calidad: vCalidad};
 function pintarTab() {
@@ -716,7 +758,7 @@ function abrirCajon(k, foco) {
     const a = sumar(filas()), r = ind.calc(a), par = PAR[k];
     const col = l => { const ej = ejemplos(l, 4); return `<div class="col"><h4><i class="punto" style="background:${LENTES[l].malo ? 'var(--d-2)' : 'var(--d2)'}"></i>${LENTES[l].t}${ej ? ` <span class="nota">${f0(ej.total)}</span>` : ''}</h4>${ej == null ? '<div class="esqueleto"></div>' : ej.items.map(v => tarjeta(v)).join('') || '<p class="nota">Sin comentarios</p>'}</div>`; };
     cajon.dataset.k = k;
-    cajon.innerHTML = `<header><span class="nota">${mesL(PERIODOS[st.periodo])} · ${PROC[ind.proc]} · ${st.negocio == null ? 'Hogar + Móvil' : NEG[st.negocio]}</span><h2 id="cajon-t" style="margin:0;font:900 22px var(--f-num)">${ind.nombre}</h2>
+    cajon.innerHTML = `<header><span class="nota">${etqMeses(st.meses)} · ${PROC[ind.proc]} · ${st.negocio == null ? 'Hogar + Móvil' : NEG[st.negocio]}</span><h2 id="cajon-t" style="margin:0;font:900 22px var(--f-num)">${ind.nombre}</h2>
         <div class="big">${fmtGrande(k, r)}</div><p class="def">${esc(ind.def)}</p><span class="nota">n ${r ? f0(r.n) : 0}${r ? ` · IC 95 % ±${f1(r.ic)}` : ''}</span>
         <button type="button" class="icono x" aria-label="Cerrar">${svgI('x')}</button></header>
       <div class="cuerpo"><div><h3>Mes a mes</h3><div class="chart" style="min-height:170px" data-lineas="${k}" data-modo="mes" id="cj-l"></div>${tablaPH('cj-l')}</div>
@@ -749,7 +791,7 @@ const dl = document.getElementById('dl'), dlPop = document.getElementById('dl-po
 const dlEst = {alcance: 'mes', formato: 'xlsx'};
 const slug = t => norm(t).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const filtrosTxt = () => [st.proceso != null ? PROC[st.proceso] : '', st.negocio != null ? NEG[st.negocio] : '', ...MULTI.filter(([k]) => st[k].size).map(([k, et]) => `${et}: ${[...st[k]].map(i => V[k][i]).join(', ')}`)].filter(Boolean).join(' · ') || 'Sin filtros';
-function dlPeriodos() { return dlEst.alcance === 'mes' ? [PERIODOS[st.periodo]] : D.base.periodos; }
+function dlPeriodos() { return dlEst.alcance === 'mes' ? st.meses.map(i => PERIODOS[i]) : D.base.periodos; }
 function dlNombre() {
   const ps = dlPeriodos(), f = [st.proceso != null ? slug(PROC[st.proceso]) : '', st.negocio != null ? slug(NEG[st.negocio]) : '', ...MULTI.filter(([k]) => st[k].size).map(([k]) => [...st[k]].map(i => slug(V[k][i])).join('-'))].filter(Boolean);
   return `factura_pago_cobro_base_${ps[0]}${ps.length > 1 ? '_a_' + ultimo(ps) : ''}${f.length ? '_' + f.join('_').slice(0, 80) : ''}.${dlEst.formato}`;
@@ -760,7 +802,7 @@ function pintarDescarga() {
   const ir = dlPop.querySelector('.ir');
   if (ir && ir.dataset.estado === 'trabajando') return;
   dlPop.innerHTML = `<h3>Descargar base de encuestas</h3>
-    <div><div class="et-dl">Meses</div><div class="seg" role="group" aria-label="Meses"><button type="button" data-a="mes" aria-pressed="${dlEst.alcance === 'mes'}">${mesL(PERIODOS[st.periodo])}</button><button type="button" data-a="todos" aria-pressed="${dlEst.alcance === 'todos'}">Todos (${mesC(D.base.periodos[0])} a ${mesC(ultimo(D.base.periodos))})</button></div></div>
+    <div><div class="et-dl">Meses</div><div class="seg" role="group" aria-label="Meses"><button type="button" data-a="mes" aria-pressed="${dlEst.alcance === 'mes'}">${etqMeses(st.meses)}</button><button type="button" data-a="todos" aria-pressed="${dlEst.alcance === 'todos'}">Todos (${mesC(D.base.periodos[0])} a ${mesC(ultimo(D.base.periodos))})</button></div></div>
     <div><div class="et-dl">Formato</div><div class="seg" role="group" aria-label="Formato"><button type="button" data-f="xlsx" aria-pressed="${dlEst.formato === 'xlsx'}" title="Libro de Excel (.xlsx)">Excel</button><button type="button" data-f="csv" aria-pressed="${dlEst.formato === 'csv'}" title="Texto separado por punto y coma">CSV</button><button type="button" data-f="parquet" aria-pressed="${dlEst.formato === 'parquet'}" title="Columnar y comprimido, para Python o Power BI">Parquet</button></div></div>
     <div class="resumen-dl"><b>${f0(n)} encuestas</b>${esc(filtrosTxt())}</div>
     <button type="button" class="ir"${n ? '' : ' disabled'}><span>Descargar ${dlEst.formato === 'xlsx' ? 'Excel' : dlEst.formato.toUpperCase()}</span></button>
@@ -825,7 +867,8 @@ btnTema.onclick = () => {
 function refrescar(o) {
   o = o || {};
   pintarCtrl(); pintarFiltros();
-  if (o.mantener) { const b = barF.querySelector(`.pill-f[data-k="${o.mantener}"] button`); if (b) b.click(); }
+  if (o.mantener === '__mes') { const b = ctrl.querySelector('#f-per button.sel'); if (b) b.click(); }
+  else if (o.mantener) { const b = barF.querySelector(`.pill-f[data-k="${o.mantener}"] button`); if (b) b.click(); }
   pintarNav(); pintarTab(); escribirHash(); pintarDescarga();
   if (cajon.dataset.k) abrirCajon(cajon.dataset.k, false);
 }
