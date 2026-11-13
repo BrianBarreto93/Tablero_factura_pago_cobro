@@ -9,7 +9,7 @@ from etl.config import ESCALA_3, ESCALAS, MOTIVOS
 # correlación de Pearson: n, Σx, Σy, Σx², Σy², Σxy; así se puede calcular con cualquier combinación de filtros.
 CORR_NPS = ["fsat", "psat", "ces1", "ces2", "va", "seg", "rap"]
 
-DIMS = ["periodo", "semana", "proceso", "negocio", "region", "casa", "canal"]
+DIMS = ["periodo", "semana", "proceso", "negocio", "segmento", "region", "casa", "canal"]
 
 # Orden fijo de las medidas: el tablero las lee por nombre desde `medidas` en datos.js
 MEDIDAS = (

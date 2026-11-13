@@ -36,27 +36,53 @@ COLUMNAS = (
     ["ID_GESTION", "ESTUDIO", "NOMBRE_ESTUDIO", "MES", "FECHA_GESTION", "FECHA_CARGA", "CIERRE_DE_CICLO",
      "NPS_NUM", "NPS_GRUPO", "CSAT_NUM", "CSAT_GRUPO", "CSAT1_NUM", "CSAT1_GRUPO", "CES1_NUM", "CES1_GRUPO",
      "CES2_NUM", "CES2_GRUPO", "CLARIDAD_NUM", "CLARIDAD_GRUPO", "VALORES_ACORDES", "SEGURIDAD", "RAPIDEZ",
-     "CANAL_COMUNICACION", "ENCUESTA", "SEGMENTO", "REGION", "CIUDAD"]
+     "CANAL_COMUNICACION", "ENCUESTA", "SEGMENTO", "REGION", "CIUDAD", "ARCHIVO_ORIGEN"]
     + list(MOTIVOS.values()) + list(ABIERTAS)
 )
 COLUMNAS_SOLO_LIMPIEZA = ["NOMBRE_CLIENTE", "NOMBRE_ANALISTA"]
 CLAVE_CUENTA = "ID_CLIENTE"   # solo para contar en SQL encuestas repetidas por cliente; no sale de Oracle
 
-# ESTUDIO → (proceso, negocio)
+# ESTUDIO → (proceso, negocio, segmento). Fijo = Hogar. Los estudios PYME llegan desde 2026-11-13 con la fuente BRM.
 ESTUDIOS = {
-    "Factura y Pago Fijo": ("Factura y pago", "Hogar"),
-    "Factura y Pago Móvil": ("Factura y pago", "Móvil"),
-    "Cobranza Fijo": ("Cobranza", "Hogar"),
-    "Cobranza Móvil": ("Cobranza", "Móvil"),
+    "Factura y Pago Fijo": ("Factura y pago", "Hogar", "Masivo"),
+    "Factura y Pago Móvil": ("Factura y pago", "Móvil", "Masivo"),
+    "Factura y Pago Fijo PYME": ("Factura y pago", "Hogar", "PYME"),
+    "Factura y Pago Móvil PYME": ("Factura y pago", "Móvil", "PYME"),
+    "Cobranza Fijo": ("Cobranza", "Hogar", "Masivo"),
+    "Cobranza Móvil": ("Cobranza", "Móvil", "Masivo"),
 }
 PROCESOS = ["Factura y pago", "Cobranza"]
 NEGOCIOS = ["Hogar", "Móvil"]
+SEGMENTOS = ["Masivo", "PYME"]
 
-# Escalas 1–5. Las etiquetas las dedujo el ETL por los motivos que acompañan cada campo (confirmadas con el
-# usuario el 2026-11-12 como supuesto de trabajo). CSAT y CSAT1 significan cosas distintas según el proceso.
+# ------------------------------------------------------------------ fuente BRM (desde 2026-11-13)
+# El proveedor alimenta cada mes INVITADO_15.TBL_ENCUESTAS_BRM (una fila por encuesta × pregunta) y
+# TBL_CLIENTES_BRM (una fila por encuesta con los datos del cliente, misma llave UNIQUEID = ID_GESTION).
+# etl/cargar_brm.py las cruza y deja las encuestas de factura y pago en TABLA, que sigue siendo la que lee el tablero.
+BRM_ENCUESTAS = "INVITADO_15.TBL_ENCUESTAS_BRM"
+BRM_CLIENTES = "INVITADO_15.TBL_CLIENTES_BRM"
+BRM_ESTUDIOS = ["Factura y Pago Fijo", "Factura y Pago Móvil", "Factura y Pago Fijo PYME", "Factura y Pago Móvil PYME"]
+BRM_ORIGEN = "TBL_ENCUESTAS_BRM"   # valor de ARCHIVO_ORIGEN en las filas que carga etl/cargar_brm.py
+# AGRUPACION (pregunta) → (columna de la nota, columna de PROFUNDIZACION). La llave se compara normalizada
+# (mayúsculas, guiones largos como «-», espacios simples). Cuadra 1.620 de 1.620 con lo que ya traía la tabla.
+BRM_PREGUNTAS = {
+    "NPS": ("NPS_NUM", "NPS_PROFUNDIZACION1"),
+    "CSAT - VALOR FACTURADO": ("CSAT_NUM", None),
+    "CSAT - PROCESO PAGO DE FACTURA": ("CSAT1_NUM", None),
+    "CES - ENTENDER EL CONTENIDO DE LA FACTURA": ("CES1_NUM", "CES1_PROFUNDIZACION1"),
+    "CES - REALIZAR EL PAGO DE LA FACTURA": ("CES2_NUM", "CES2_PROFUNDIZACION1"),
+    "VALORES ACORDES AL PLAN": ("VALORES_ACORDES", "VALORES_ACORDES_PROFUNDIZACION1"),
+    "EVALUACIÓN SEGURIDAD DEL PAGO": ("SEGURIDAD", "SEGURIDAD_PROFUNDIZACION1"),
+    "EVALUACIÓN RAPIDEZ DEL PAGO": ("RAPIDEZ", "RAPIDEZ_PROFUNDIZACION1"),
+    "SUGERENCIA": (None, "SUGERENCIA"),
+}
+BRM_VALORES_ACORDES = {"1": "Si", "2": "No"}   # BRM trae código; la tabla, texto
+
+# Escalas 1–5. Desde la fuente BRM el nombre de cada pregunta viene en AGRUPACION (factura y pago confirmado:
+# CSAT = «valor facturado», CSAT1 = «proceso pago de factura»). Las de cobranza siguen deducidas por los motivos.
 ESCALAS = {
     #  clave: (columna, proceso, nombre)
-    "fsat": ("CSAT_NUM", "Factura y pago", "Satisfacción con la factura"),
+    "fsat": ("CSAT_NUM", "Factura y pago", "Satisfacción con el valor facturado"),
     "psat": ("CSAT1_NUM", "Factura y pago", "Satisfacción con el pago"),
     "ces1": ("CES1_NUM", "Factura y pago", "Facilidad para entender la factura"),
     "ces2": ("CES2_NUM", "Factura y pago", "Facilidad para pagar"),

@@ -1,4 +1,4 @@
-"""Orquesta el ETL: Oracle → limpieza → contrato de calidad → cubo + verbatims → data/periodos/AAAAMM.json
+"""Orquesta el ETL: fuente BRM → tabla del tablero (etl/cargar_brm.py) → Oracle → limpieza → contrato de calidad → cubo + verbatims → data/periodos/AAAAMM.json
 → tablero/datos.js (todos los periodos guardados, codificados por diccionario).
 
 Idempotente por periodo: cada corrida reemplaza solo los meses que encuentra en Oracle y conserva los demás
@@ -6,7 +6,8 @@ Idempotente por periodo: cada corrida reemplaza solo los meses que encuentra en 
 «error» falla, no se escribe nada.
 
 Uso:
-    .venv/bin/python -m etl.construir                   # todos los periodos que haya en Oracle
+    .venv/bin/python -m etl.construir                   # BRM → tabla, y todos los periodos que haya en la tabla
+    .venv/bin/python -m etl.construir --sin-brm         # sin sincronizar BRM (solo lee la tabla)
     .venv/bin/python -m etl.construir --periodo 202610  # uno solo
     .venv/bin/python -m etl.construir --solo-ensamblar  # rehace datos.js con lo ya guardado (sin Oracle)
 """
@@ -16,9 +17,9 @@ import sys
 from collections import Counter
 from datetime import datetime
 
-from etl import agregar, base, calidad, dolores, extraer, verbatims
+from etl import agregar, base, calidad, cargar_brm, dolores, extraer, verbatims
 from etl.config import (ABIERTAS, DIR_PERIODOS, ESCALA_3, ESCALAS, MOTIVOS, N_MINIMO, NEGOCIOS, NO_APLICA, PROCESOS,
-                        REGIONES, SALIDA_JS, SIN_DATO, TABLA)
+                        REGIONES, SALIDA_JS, SEGMENTOS, SIN_DATO, TABLA)
 from etl.limpiar import limpiar
 
 # Notas que viajan con cada comentario (para elegir ejemplos por indicador)
@@ -34,14 +35,20 @@ def _anterior(p):
     return f"{a - 1}12" if m == 1 else f"{a}{m - 1:02d}"
 
 
-def procesar(periodos_pedidos=None):
+def procesar(periodos_pedidos=None, brm=True):
     conn = extraer.conectar()
+    if brm:  # primero la fuente BRM → tabla del tablero (factura y pago); después se lee la tabla como siempre
+        cargar_brm.sincronizar(conn, escribir=True)
     calidad.esquema(extraer.columnas_tabla(conn))
     crudo = extraer.encuestas(conn)
     repetidas = extraer.cuentas_repetidas(conn)
     conn.close()
 
     d = limpiar(crudo)
+    # Nombres de todo el corte para el tapado de comentarios (en PYME el NOMBRE es la empresa, no la persona)
+    pyme = d.segmento == "PYME"
+    verbatims.fijar_nombres_globales(list(crudo.NOMBRE_CLIENTE[~pyme]) + list(crudo.NOMBRE_ANALISTA),
+                                     list(crudo.NOMBRE_CLIENTE[pyme]))
     if d.periodo.isna().any():
         raise calidad.ErrorCalidad(f"{int(d.periodo.isna().sum())} encuestas sin FECHA_GESTION")
     carga = crudo.FECHA_CARGA.max()
@@ -120,7 +127,7 @@ def ensamblar():
         for f in s["filas"]:
             for k in dims:
                 peso[k][f["d"][k]] += f["m"][0]
-    fijos = {"proceso": PROCESOS, "negocio": NEGOCIOS, "region": REGIONES}
+    fijos = {"proceso": PROCESOS, "negocio": NEGOCIOS, "segmento": SEGMENTOS, "region": REGIONES}
     dic = {}
     for k in dims:
         vals = list(peso[k])
@@ -210,10 +217,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--periodo", action="append", help="AAAAMM; se puede repetir")
     ap.add_argument("--solo-ensamblar", action="store_true")
+    ap.add_argument("--sin-brm", action="store_true", help="no sincroniza la fuente BRM antes de leer la tabla")
     a = ap.parse_args()
     if not a.solo_ensamblar:
         try:
-            procesar(a.periodo)
+            procesar(a.periodo, brm=not a.sin_brm)
         except calidad.ErrorCalidad as e:
             print(f"CORRIDA DETENIDA: {e}", file=sys.stderr)
             raise SystemExit(1)

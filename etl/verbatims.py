@@ -3,6 +3,7 @@ cliente (NOMBRE_CLIENTE, que los analistas copian en SUGERENCIA), los encabezado
 («Nos comunicamos con …», «NOMBRE DEL TITULAR …») y los nombres propios que siguen a «asesor», «señor»…
 """
 import re
+import unicodedata
 
 import pandas as pd
 
@@ -51,13 +52,54 @@ def _parece_nombre(m):
     return not any(p.strip(".,") in frecuentes for p in palabras)
 
 
+# BRM pega los renglones que el analista escribió aparte: «pago móvilANGELA PÉREZ», «titularJAROLL». Sin el espacio,
+# \b no separa el nombre y se escaparía del tapado. Corre después de tapar correos (para no partir «mariaGOMEZ@…»).
+_PEGADO = re.compile(r"([a-záéíóúñ])([A-ZÁÉÍÓÚÑ]{2,})")
+
+# Nombres de TODAS las encuestas del corte (no solo el del propio cliente): en PYME el NOMBRE es la empresa y el
+# analista escribe el nombre de la persona de contacto («El cliente ADRIANA se encuentra…»). etl.construir los fija
+# con fijar_nombres_globales(). Palabras en mayúsculas que estén aquí se tapan; en tipo título, solo pares de palabras
+# con mayúscula inicial donde alguna es nombre de persona («Fredi Ariza»), para no tapar frases normales. En sep–nov
+# eso tapa 14 pares: casi todos nombres y algunos lugares («Santa Helena»), que se pierden sin daño.
+_GLOBAL = {"todos": set(), "personas": set()}
+_NO_GLOBAL = {"CLARO", "MOVIL", "MÓVIL", "HOGAR", "PYME", "FIBRA", "NEQUI", "DAVIPLATA", "BANCOLOMBIA", "FACTURA", "PAGO",
+              "SERVICIO", "SERVICIOS", "CLIENTE", "TODO", "BIEN", "PLAN", "INTERNET", "TELEFONIA", "TELEFONÍA", "COLOMBIA"}
+
+
+def _clave(t):
+    return unicodedata.normalize("NFD", t.upper()).encode("ascii", "ignore").decode()
+
+
+def fijar_nombres_globales(personas, empresas=()):
+    """personas/empresas = textos de nombres (cliente Masivo y analista / razón social PYME)."""
+    per = {_clave(t) for t in tokens_nombre(*personas) if len(t) >= 3}
+    emp = {_clave(t) for t in tokens_nombre(*empresas) if len(t) >= 3}
+    no = {_clave(w) for w in _NO_GLOBAL}
+    _GLOBAL["personas"], _GLOBAL["todos"] = per - no, (per | emp) - no
+
+
+_PALABRA_MAYUS = re.compile(r"\b[A-ZÁÉÍÓÚÑÜ]{3,}\b")
+_PAR_TITULO = re.compile(r"\b([A-ZÁÉÍÓÚÑ][a-záéíóúñü]{2,})\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñü]{2,})\b")
+
+
+def _tapar_globales(s):
+    if not _GLOBAL["todos"]:
+        return s
+    s = _PALABRA_MAYUS.sub(lambda m: "[nombre]" if _clave(m.group()) in _GLOBAL["todos"] else m.group(), s)
+    return _PAR_TITULO.sub(lambda m: "[nombre]" if any(_clave(g) in _GLOBAL["personas"] for g in m.groups()) else m.group(), s)
+
+
 def tapar(texto, nombres=()):
     s = _CORREO.sub("[correo]", texto)
+    s = _PEGADO.sub(r"\1 \2", s)
     s = _CIFRA.sub(lambda m: "[#]" if sum(c.isdigit() for c in m.group()) >= 5 else m.group(), s)
     s = _ENCABEZADO.sub(lambda m: m.group().split(" con ")[0] + " con [nombre]" if " con " in m.group() else "[nombre]", s)
     s = _TITULAR.sub(lambda m: "[nombre]" if m.group(2) else m.group(), s)
     for nom in sorted(set(nombres), key=len, reverse=True):
         s = re.sub(rf"\b{re.escape(nom)}\b", "[nombre]", s, flags=re.I)
+        # pegado en tipo título o mayúsculas a la palabra anterior: «móvilAngela»
+        s = re.sub(rf"(?<=[a-záéíóúñ])(?:{re.escape(nom.upper())}|{re.escape(nom.title())})\b", " [nombre]", s)
+    s = _tapar_globales(s)
     s = _ROL.sub(lambda m: m.group(1) + "[nombre]", s)
     s = _MAYUS.sub(lambda m: "[nombre]" if _parece_nombre(m) else m.group(), s)
     s = re.sub(r"(\[nombre\][\s,]*){2,}", "[nombre] ", s)

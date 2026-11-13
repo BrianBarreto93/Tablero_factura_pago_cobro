@@ -89,14 +89,16 @@ def motivos(v):
 
 def limpiar(crudo):
     d = pd.DataFrame(index=crudo.index)
-    # Periodo = mes de FECHA_GESTION (día de la llamada). La columna MES no trae el año.
+    # Periodo = mes de FECHA_GESTION (día de la llamada). En las filas de la fuente BRM, FECHA_GESTION es la
+    # FECHA_REGISTRADA de TBL_CLIENTES_BRM (etl/cargar_brm.py); en las de sep–oct ya cargadas, coinciden. MES no trae año.
     fecha = pd.to_datetime(crudo.FECHA_GESTION, errors="coerce")
     d["fecha"] = fecha
     d["periodo"] = fecha.dt.strftime("%Y%m")
     d["semana"] = (fecha.dt.normalize() - pd.to_timedelta(fecha.dt.day_of_week, unit="D")).dt.strftime("%Y-%m-%d")
     d["estudio"] = crudo.ESTUDIO.map(texto_opcion)
-    d["proceso"] = d.estudio.map(lambda e: ESTUDIOS.get(e, (None, None))[0])
-    d["negocio"] = d.estudio.map(lambda e: ESTUDIOS.get(e, (None, None))[1])
+    d["proceso"] = d.estudio.map(lambda e: ESTUDIOS.get(e, (None, None, None))[0])
+    d["negocio"] = d.estudio.map(lambda e: ESTUDIOS.get(e, (None, None, None))[1])
+    d["segmento"] = d.estudio.map(lambda e: ESTUDIOS.get(e, (None, None, None))[2])
     fp = d.proceso == "Factura y pago"
 
     d["nps"] = pd.to_numeric(crudo.NPS_NUM.map(lambda v: a_entero(v, 0, 10)), errors="coerce").where(fp)

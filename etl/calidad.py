@@ -5,7 +5,7 @@ import re
 
 import pandas as pd
 
-from etl.config import (COLUMNAS, ESTUDIOS, GRUPOS_FUENTE, MOTIVOS, REQUERIDOS, SIN_DATO,
+from etl.config import (BRM_CLIENTES, BRM_ENCUESTAS, BRM_ORIGEN, COLUMNAS, ESTUDIOS, GRUPOS_FUENTE, MOTIVOS, REQUERIDOS, SIN_DATO,
                         VARIACION_N_AVISO)
 from etl.limpiar import a_entero, texto_opcion
 
@@ -44,9 +44,9 @@ def evaluar(crudo, d, repetidas=None, n_anterior=None):
                     f"{dup} ID_GESTION repetidos" if dup else "Sin repetidos", dup))
 
     fuera = int(d.proceso.isna().sum())
-    out.append(_chk("estudio", "error" if fuera else "ok", "ESTUDIO es uno de los cuatro conocidos",
+    out.append(_chk("estudio", "error" if fuera else "ok", "ESTUDIO es uno de los conocidos",
                     f"{fuera} filas con otro estudio: {sorted(crudo.ESTUDIO[d.proceso.isna()].astype(str).unique())[:3]}"
-                    if fuera else ", ".join(f"{e}: {num((d.estudio == e).sum())}" for e in ESTUDIOS), fuera))
+                    if fuera else ", ".join(f"{e}: {num((d.estudio == e).sum())}" for e in ESTUDIOS if (d.estudio == e).any()), fuera))
 
     # Notas dentro de su escala: un valor que no es número o se sale del rango detiene la corrida
     malos = []
@@ -123,6 +123,14 @@ def evaluar(crudo, d, repetidas=None, n_anterior=None):
         out.append(_chk("clientes_repetidos", "aviso" if extra else "ok", "Clientes con más de una encuesta",
                         f"{extra} encuestas de más sobre el mismo cliente y estudio. Se conservan: la unidad del "
                         "tablero es la encuesta." if extra else "Un cliente por encuesta en cada estudio", extra))
+
+    # De dónde vino cada encuesta: la fuente BRM (desde 2026-11-13) o los Excel con que se cargó la tabla al inicio
+    brm = crudo.ARCHIVO_ORIGEN.map(texto_opcion) == BRM_ORIGEN
+    out.append(_chk("origen", "ok", "Origen de las encuestas",
+                    f"{num(brm.sum())} cargadas desde {BRM_ENCUESTAS.split('.')[-1]} + {BRM_CLIENTES.split('.')[-1]} "
+                    f"(mes = FECHA_REGISTRADA) y {num((~brm).sum())} desde los Excel de la carga inicial (las de factura y "
+                    "pago coinciden una a una con BRM). BRM no trae el texto que explica «Otro» o el código 94 de un motivo.",
+                    int(brm.sum())))
 
     bases = sorted(crudo.NOMBRE_ESTUDIO.map(texto_opcion).dropna().unique())
     out.append(_chk("bases", "ok", "Bases cargadas", f"{len(bases)} bases: " + ", ".join(re.sub(r"^Base_", "", b) for b in bases),

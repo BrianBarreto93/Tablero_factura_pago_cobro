@@ -5,7 +5,7 @@ import re
 import pandas as pd
 import pytest
 
-from etl import agregar, calidad, dolores, verbatims
+from etl import agregar, calidad, cargar_brm, dolores, verbatims
 from etl.config import ABIERTAS, COLUMNAS, COLUMNAS_SOLO_LIMPIEZA, RAIZ
 from etl.limpiar import canal, limpiar, motivos, region, texto_opcion
 
@@ -92,6 +92,10 @@ def test_tapar_nombres_y_plantillas():
         "no ha presentado fallas con el servicio. Que no suban el valor. Nota: No se dejan notas en AC por usuario no activo", []))
     assert t == "Que no suban el valor"
     assert "Dulce" not in verbatims.tapar("Ser más clara la información. Contesta encuesta: Dulce", [])
+    # BRM pega renglones: el nombre queda pegado a la palabra anterior
+    nombres = verbatims.tokens_nombre("ANGELA PATRICIA CASTRO ROBLES", "")
+    t = verbatims.tapar("Titular : Evaluación factura y pago móvilANGELA PATRICIA CASTRO ROBLES Cliente manifiesta", nombres)
+    assert "ANGELA" not in t and "CASTRO" not in t
 
 
 def test_util_descarta_genericos():
@@ -121,6 +125,85 @@ def test_cubo_suma_conteos():
     assert sum(M[f"cinf_{i}"] for i in range(1, 6)) == d.cinf.notna().sum()
     assert M["va_no"] == (d.va == 0).sum() and M["seg_1"] == (d.seg == 1).sum()
     assert M["mot_ces2"] == d.mot_ces2.map(bool).sum()
+
+
+def _brm():
+    """Dos encuestas en formato largo de BRM (una Fijo PYME, una Móvil) y sus clientes."""
+    preg = ["NPS", "CSAT - VALOR FACTURADO", "CSAT - PROCESO PAGO DE FACTURA", "CES – ENTENDER EL CONTENIDO DE LA FACTURA",
+            "CES – REALIZAR EL PAGO DE LA FACTURA", "VALORES ACORDES AL PLAN", "EVALUACIÓN SEGURIDAD DEL PAGO",
+            "EVALUACIÓN RAPIDEZ DEL PAGO", "SUGERENCIA"]
+    resp = {1: ["10", "4", "3", "5", "2", "1", "3", "1", None], 2: ["6", "1", "5", "3", "4", "2", "2", "3", None]}
+    prof = {1: [None, None, None, None, "94", None, None, "1", "Que la factura llegue antes"],
+            2: ["caro", None, None, "Otro", None, "Existen cargos adicionales cuyo origen no es claro", None, None, "ninguna"]}
+    est = {1: "Factura y Pago Fijo PYME", 2: "Factura y Pago Móvil"}
+    enc = pd.DataFrame([{"UNIQUEID": u, "ESTUDIO_ESCRITO": est[u], "AGRUPACION": p, "RESPUESTAS": resp[u][i],
+                         "PROFUNDIZACION": prof[u][i]} for u in (1, 2) for i, p in enumerate(preg)])
+    cli = pd.DataFrame([{"UNIQUEID": u, "ESTUDIO": est[u], "BASE": "Base_x", "FECHA_REGISTRADA": {1: "2026-09-01 01:15:30", 2: "2026-10-02 02:15:30"}[u],
+                         "REGION": "REGION COSTA", "CIUDAD": "CALI", "USUARIO_CONSULTOR": "LUIS TORRES",
+                         "NOMBRE": "ANA RUIZ", "REGISTROID": 12345 + u, "TELEFONO_1": "3000000000"} for u in (1, 2)])
+    return enc, cli
+
+
+def test_brm_arma_una_fila_por_encuesta():
+    filas, avisos = cargar_brm.armar(*_brm())
+    assert avisos == [] and list(filas.ID_GESTION) == ["1", "2"]
+    a, b = filas.iloc[0], filas.iloc[1]
+    assert (a.ESTUDIO, a.MES, a.HORA_GESTION, a.TIPO_ID, a.ID_CLIENTE) == ("Factura y Pago Fijo PYME", "SEP", "01:15:30", None, "12346")
+    assert a.FECHA_GESTION == pd.Timestamp("2026-09-01") and b.FECHA_GESTION == pd.Timestamp("2026-10-02")
+    assert (a.NPS_NUM, a.NPS_GRUPO, a.CSAT_NUM, a.CSAT_GRUPO, a.CES2_GRUPO, a.VALORES_ACORDES) == ("10", "Promotores", "4", "Satisfecho", "Uso Complicado", "Si")
+    assert (b.NPS_GRUPO, b.VALORES_ACORDES, b.VALORES_ACORDES_PROFUNDIZACION1, b.CES1_PROFUNDIZACION1) == (
+        "Detractores", "No", "Existen cargos adicionales cuyo origen no es claro", "Otro")
+    assert (a.CES2_PROFUNDIZACION1, a.RAPIDEZ_PROFUNDIZACION1, a.SUGERENCIA) == ("94", "1", "Que la factura llegue antes")
+    # Lo armado pasa por la misma limpieza y contrato que el resto de la tabla
+    crudo = filas.reindex(columns=COLUMNAS + COLUMNAS_SOLO_LIMPIEZA)
+    d = limpiar(crudo)
+    assert list(d.segmento) == ["PYME", "Masivo"] and list(d.negocio) == ["Hogar", "Móvil"] and list(d.va) == [1, 0]
+    assert [c["id"] for c in calidad.evaluar(crudo, d) if c["nivel"] == "error"] == []
+
+
+def test_brm_nota_fuera_de_escala_no_escribe():
+    enc, cli = _brm()
+    enc.loc[(enc.UNIQUEID == 1) & (enc.AGRUPACION == "NPS"), "RESPUESTAS"] = "11"
+    filas, _ = cargar_brm.armar(enc, cli)
+    with pytest.raises(SystemExit, match="contrato de calidad"):
+        cargar_brm.validar(filas)
+
+
+def test_brm_vacio_en_brm_se_compara_como_none():
+    filas, _ = cargar_brm.armar(*_brm())
+    tabla = filas[["ID_GESTION"] + cargar_brm.COMPARAR].copy()
+    tabla.loc[0, "NPS_PROFUNDIZACION1"] = "texto viejo"
+    _, cambios = cargar_brm.comparar(filas, tabla)
+    assert cambios == [("1", "NPS_PROFUNDIZACION1", "texto viejo", None)]
+
+
+def test_tapar_nombres_de_otras_encuestas():
+    verbatims.fijar_nombres_globales(["ADRIANA LOPEZ", "FREDI ARIZA"], ["INVERSIONES XYZ SAS"])
+    try:
+        assert "ADRIANA" not in verbatims.tapar("El cliente ADRIANA se encuentra satisfecho", [])
+        assert "Ariza" not in verbatims.tapar("Fredi Ariza sacar telefonía", [])
+        assert verbatims.tapar("Que Claro mejore la Factura", []) == "Que Claro mejore la Factura"
+        assert "mariaGOMEZ" not in verbatims.tapar("escribir a mariaGOMEZ88@gmail.com", [])
+    finally:
+        verbatims.fijar_nombres_globales([], [])
+
+
+def test_brm_pregunta_nueva_detiene():
+    enc, cli = _brm()
+    enc.loc[0, "AGRUPACION"] = "CSAT - ALGO NUEVO"
+    with pytest.raises(SystemExit):
+        cargar_brm.armar(enc, cli)
+
+
+def test_brm_compara_sin_saltos_y_detecta_cambios():
+    filas, _ = cargar_brm.armar(*_brm())
+    tabla = filas[["ID_GESTION"] + cargar_brm.COMPARAR].copy()
+    tabla.loc[0, "SUGERENCIA"] = "Que la factura_x000D_\n llegue antes "
+    ins, cambios = cargar_brm.comparar(filas, tabla)
+    assert len(ins) == 0 and cambios == []
+    tabla.loc[1, "CSAT_NUM"] = "5"
+    ins, cambios = cargar_brm.comparar(filas, tabla.iloc[1:])
+    assert list(ins.ID_GESTION) == ["1"] and cambios == [("2", "CSAT_NUM", "5", "1")]
 
 
 # ---------------------------------------------------------------- salida real (después de etl.construir)
@@ -171,6 +254,13 @@ def oracle():
     conn.close()
 
 
+def test_tabla_al_dia_con_brm(oracle):
+    """Después de etl.construir, toda encuesta de factura y pago de BRM está en la tabla y con los mismos valores."""
+    res = cargar_brm.sincronizar(oracle, escribir=False)
+    assert res["brm_encuestas"] > 2000
+    assert (res["insertar"], res["celdas_cambiadas"]) == (0, 0), res
+
+
 def test_cifras_cuadran_con_oracle(oracle):
     """NPS, CSAT, CES y n por estudio y mes del tablero = SQL directo sobre la tabla."""
     from etl.extraer import _df
@@ -186,11 +276,11 @@ def test_cifras_cuadran_con_oracle(oracle):
     nd = len(D["dims"])
     M = {m: nd + i for i, m in enumerate(D["medidas"])}
     from etl.config import ESTUDIOS
+    val = lambda f, k: D["valores"][k][f[D["dims"].index(k)]]
     for r in ref.itertuples():
-        proc, neg = ESTUDIOS[r.E]
-        sel = [f for f in D["cubo"] if D["valores"]["periodo"][f[0]] == r.P
-               and D["valores"]["proceso"][f[D["dims"].index("proceso")]] == proc
-               and D["valores"]["negocio"][f[D["dims"].index("negocio")]] == neg]
+        proc, neg, seg = ESTUDIOS[r.E]
+        sel = [f for f in D["cubo"] if val(f, "periodo") == r.P and val(f, "proceso") == proc
+               and val(f, "negocio") == neg and val(f, "segmento") == seg]
         s = lambda m: sum(f[M[m]] for f in sel)
         assert s("n") == r.N, (r.P, r.E)
         clave = "fsat" if proc == "Factura y pago" else "cinf"

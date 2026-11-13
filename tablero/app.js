@@ -14,7 +14,7 @@ const MI = Object.fromEntries(D.medidas.map((m, i) => [m, ND + i]));
 const NMIN = D.n_minimo, PERIODOS = V.periodo, PROC = V.proceso, NEG = V.negocio;
 const FP = PROC.indexOf('Factura y pago'), COB = PROC.indexOf('Cobranza');
 const CE = {'Hogar': 'var(--s-hog)', 'Móvil': 'var(--s-mov)'};
-const MULTI = [['region', 'Región'], ['casa', 'Casa de cobro'], ['canal', 'Canal']];
+const MULTI = [['segmento', 'Segmento'], ['region', 'Región'], ['casa', 'Casa de cobro'], ['canal', 'Canal']];
 const MT = new Map();   // fila del cubo → [[motivo, conteo]]
 for (const [r, t, c] of D.motivos.filas) { if (!MT.has(r)) MT.set(r, []); MT.get(r).push([t, c]); }
 const ultimo = a => a[a.length - 1];
@@ -53,13 +53,13 @@ const IND = {
   nps: {nombre: 'NPS · recomendación', corto: 'NPS', proc: FP, min: -100, max: 100, tipo: 'nps',
     def: 'Net Promoter Score de factura y pago: % promotores (9–10) − % detractores (0–6). Base: todas las respuestas de recomendación.',
     calc: a => { if (!a.nps_val) return null; const p = a.prom / a.nps_val, d = a.det / a.nps_val; return {v: (p - d) * 100, n: a.nps_val, ic: 196 * Math.sqrt((p + d - (p - d) ** 2) / a.nps_val)}; }},
-  fsat: esc5('fsat', 'CSAT factura', FP, 'campo CSAT de factura y pago'),
-  ces1: esc5('ces1', 'CES factura', FP, 'campo CES1: fácil y muy fácil'),
+  fsat: esc5('fsat', 'CSAT factura', FP, 'pregunta «CSAT - valor facturado»'),
+  ces1: esc5('ces1', 'CES factura', FP, 'pregunta «CES - entender el contenido de la factura»: fácil y muy fácil'),
   va: {nombre: 'Valores acordes al plan', corto: 'Valores acordes', proc: FP, min: 0, max: 100, tipo: 'sino',
     def: '% que responde «Sí» a si los valores de la factura van de acuerdo con su plan. Base: Sí + No.',
     calc: a => prop(a.va_si, a.va_si + a.va_no)},
-  psat: esc5('psat', 'CSAT pago', FP, 'campo CSAT1 de factura y pago'),
-  ces2: esc5('ces2', 'CES pago', FP, 'campo CES2: fácil y muy fácil'),
+  psat: esc5('psat', 'CSAT pago', FP, 'pregunta «CSAT - proceso pago de factura»'),
+  ces2: esc5('ces2', 'CES pago', FP, 'pregunta «CES - realizar el pago de la factura»: fácil y muy fácil'),
   seg: {nombre: 'Seguridad al pagar', corto: 'Seguridad', proc: FP, min: 0, max: 100, tipo: 'esc3',
     def: '% que califica 2 o 3 la seguridad del pago (escala de 1 a 3; el 1 es la respuesta mala). Supuesto sin confirmar con negocio.',
     calc: a => prop(a.seg_2 + a.seg_3, a.seg_1 + a.seg_2 + a.seg_3)},
@@ -515,7 +515,7 @@ function vRuta() {
     return `<div class="etapa"><h3><span class="ord" aria-hidden="true">${i + 1}</span>${E.t}</h3><p>${E.s}</p>${pasos || '<p class="vacio nota">Sin encuestas de esta etapa con los filtros actuales</p>'}</div>`;
   };
   const con = (k, txt) => `<div class="conector" aria-hidden="true"><svg viewBox="0 0 28 16">${ICO[k]}</svg>${txt ? `<small>${txt}</small>` : ''}</div>`;
-  return `<section class="panel"><header><h2 ${tipAttr('Todos los indicadores de la encuesta, en el orden en que el cliente vive el proceso. Respeta los filtros de mes, negocio, región, casa de cobro y canal; no el de proceso. Clic en un indicador para ver su detalle y comentarios.')}>El recorrido del cliente <span class="info">?</span></h2>
+  return `<section class="panel"><header><h2 ${tipAttr('Todos los indicadores de la encuesta, en el orden en que el cliente vive el proceso. Respeta los filtros de mes, negocio, segmento, región, casa de cobro y canal; no el de proceso. Clic en un indicador para ver su detalle y comentarios.')}>El recorrido del cliente <span class="info">?</span></h2>
       <div class="leyenda">${NEG.map(e => `<span><i style="background:${CE[e]};border-radius:50%"></i>${e}</span>`).join('')}<span><i class="l" style="background:var(--ink);opacity:.55;width:2px;height:11px"></i>Total</span><span class="nota">Punto hueco = menos de ${NMIN} encuestas</span></div>
       <p class="sub">${etqMeses(st.meses)} · ${st.negocio == null ? 'Hogar + Móvil' : NEG[st.negocio]}. La raya roja marca el indicador más bajo de cada etapa. Junto al n, la correlación con el NPS (verde fuerte, amarillo moderada, rojo baja).</p></header>
     <div class="ruta">${etapa(ETAPAS[0], 0)}${con('flecha')}${etapa(ETAPAS[1], 1)}${con('flechaP', 'si no paga a tiempo')}${etapa(ETAPAS[2], 2)}</div></section>`;
@@ -684,7 +684,7 @@ function vFactura(p) {
     const idx = filas(), a = sumar(idx), gr = grNeg();
     return `${kpiCards(['fsat', 'ces1', 'va'])}
     <div class="g g2"><section class="panel"><header><h2>¿Qué tan fácil es entender la factura?</h2><p class="sub">CES 1 · centrado en el 3: a la izquierda lo difícil, a la derecha lo fácil.</p></header>${divergente(gr, 'ces1')}</section>
-      <section class="panel"><header><h2>¿Los valores cuadran con el plan?</h2><p class="sub">Y la satisfacción con la factura, de 1 a 5.</p></header>${apilada(gr, PARTES.va, 'va')}<div style="height:10px"></div>${divergente(gr, 'fsat')}</section></div>
+      <section class="panel"><header><h2>¿Los valores cuadran con el plan?</h2><p class="sub">Y la satisfacción con el valor facturado, de 1 a 5.</p></header>${apilada(gr, PARTES.va, 'va')}<div style="height:10px"></div>${divergente(gr, 'fsat')}</section></div>
     <div class="g g2">${panelMotivos('va', 'Por qué no cuadran los valores', 'Motivos de quienes dicen que no', idx)}${panelMotivos('ces1', 'Qué cuesta entender de la factura', 'Motivos de quienes califican 1 a 3', idx)}</div>
     ${carrusel('fac', ['vano', 'fdif', 'fmal', 'fbien'])}
     <div class="g g2">${ranking('va', 'va')}${ranking('ces1', 'ces1')}</div>`;
@@ -734,10 +734,10 @@ function vCalidad(p) {
     <div class="g g-2-1"><section class="panel"><header><h2>Contrato de datos · ${mesL(per)}</h2><span class="nota">${n('ok')} correctos · ${n('aviso')} avisos · ${n('error')} errores</span><p class="sub">Un «error» detiene la actualización y no se publica. Los avisos se explican aquí. Elige el mes:</p></header>
       <div class="meses" role="group" aria-label="Mes">${PERIODOS.map((pp, i) => { const a = D.periodos[pp].calidad.filter(c => c.nivel !== 'ok').length; return `<button type="button" data-i="${i}" aria-pressed="${i === st.periodo}">${mesC(pp)} · ${a} avisos</button>`; }).join('')}</div><div style="height:10px"></div>
       <div class="checks">${ch.map(c => `<div class="check ${c.nivel}"><span class="ico" aria-hidden="true">${ico[c.nivel]}</span><div><b>${esc(c.titulo)}</b><span class="sr"> (${c.nivel})</span><p>${esc(c.detalle)}</p></div></div>`).join('')}</div></section>
-      <div class="g" style="align-content:start"><section class="panel"><header><h2>Fuente</h2></header><dl class="defs"><dt>Tabla</dt><dd>${esc(D.tabla)} · Oracle, solo lectura</dd><dt>Encuestas</dt><dd>${f0(inf.n)} en ${mesL(per)} · ${f0(PERIODOS.reduce((s, pp) => s + D.periodos[pp].n, 0))} en total</dd><dt>Carga en Oracle</dt><dd>${esc(inf.fecha_carga)}</dd><dt>Procesado</dt><dd>${esc(inf.generado)}</dd><dt>Comentarios</dt><dd>${f0(D.n_comentarios)} con contenido, con datos personales tapados</dd></dl></section>
+      <div class="g" style="align-content:start"><section class="panel"><header><h2>Fuente</h2></header><dl class="defs"><dt>Tabla</dt><dd>${esc(D.tabla)} · Oracle. Factura y pago llega cada mes desde TBL_ENCUESTAS_BRM + TBL_CLIENTES_BRM (cruce por UNIQUEID); cobranza, de la carga inicial.</dd><dt>Encuestas</dt><dd>${f0(inf.n)} en ${mesL(per)} · ${f0(PERIODOS.reduce((s, pp) => s + D.periodos[pp].n, 0))} en total</dd><dt>Carga en Oracle</dt><dd>${esc(inf.fecha_carga)}</dd><dt>Procesado</dt><dd>${esc(inf.generado)}</dd><dt>Comentarios</dt><dd>${f0(D.n_comentarios)} con contenido, con datos personales tapados</dd></dl></section>
         <section class="panel"><header><h2>Definiciones</h2></header><dl class="defs">${KS.map(k => `<dt>${IND[k].corto}</dt><dd>${esc(IND[k].nombre)}. ${esc(IND[k].def)}</dd>`).join('')}
-          <dt>Mes</dt><dd>Mes de FECHA_GESTION, el día de la llamada. La columna MES no trae el año.</dd><dt>Unidad</dt><dd>La encuesta (ID_GESTION).</dd><dt>Negocio</dt><dd>Fijo = Hogar; Móvil = Móvil.</dd><dt>IC 95 %</dt><dd>Margen de error por muestreo. Diferencias menores pueden ser ruido.</dd>
-          <dt>Supuestos</dt><dd>La tabla no dice qué pregunta es cada campo. Las etiquetas de CSAT, CSAT1, CES1 y CES2 y el umbral 2–3 de seguridad y rapidez se dedujeron de los motivos que acompañan a cada campo; falta confirmarlos con el cuestionario.</dd></dl></section></div></div>`;
+          <dt>Mes</dt><dd>Mes de FECHA_GESTION, el día de la llamada. En factura y pago es la FECHA_REGISTRADA de TBL_CLIENTES_BRM.</dd><dt>Unidad</dt><dd>La encuesta (ID_GESTION).</dd><dt>Negocio</dt><dd>Fijo = Hogar; Móvil = Móvil.</dd><dt>Segmento</dt><dd>PYME = estudios «Factura y Pago Fijo PYME» y «Móvil PYME»; Masivo = el resto. Hogar y Móvil incluyen PYME salvo que se filtre.</dd><dt>IC 95 %</dt><dd>Margen de error por muestreo. Diferencias menores pueden ser ruido.</dd>
+          <dt>Supuestos</dt><dd>En factura y pago, el nombre de cada pregunta viene de BRM (AGRUPACION). Siguen sin confirmar el umbral 2–3 de seguridad y rapidez y las etiquetas de cobranza (CSAT = información del cobro, CSAT1 = trato), que se dedujeron de los motivos.</dd></dl></section></div></div>`;
   p.querySelectorAll('.meses button').forEach(b => { b.onclick = () => { fijarMeses([+b.dataset.i]); refrescar(); }; });
 }
 const VISTAS = {resumen: vResumen, factura: vFactura, pago: vPago, cobranza: vCobranza, voz: vVoz, calidad: vCalidad};

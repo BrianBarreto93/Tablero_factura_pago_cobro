@@ -5,3 +5,4 @@ __pycache__/
 *.pyc
 data/respaldo_publicado/
 graphify-out/
+data/cargas/

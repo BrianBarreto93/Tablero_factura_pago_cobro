@@ -9,13 +9,13 @@ from etl.verbatims import sin_plantilla, tapar, tokens_nombre, util
 
 NOMBRES_MOTIVO = {"ces1": "Motivos: entender la factura", "va": "Motivos: valores que no cuadran", "ces2": "Motivos: pagar",
                   "seg": "Motivos: seguridad", "rap": "Motivos: rapidez"}
-COLUMNAS = (["ID gestión", "Fecha gestión", "Mes", "Estudio", "Proceso", "Negocio", "Región", "Ciudad", "Casa de cobro",
+COLUMNAS = (["ID gestión", "Fecha gestión", "Mes", "Estudio", "Proceso", "Negocio", "Segmento", "Región", "Ciudad", "Casa de cobro",
              "Canal de comunicación", "Cierre de ciclo", "Recomendación (0-10)", "Grupo NPS"]
             + [f"{ESCALAS[k][2]} (1-5)" for k in ESCALAS]
             + ["Valores acordes al plan"] + [f"{v[1]} (1-3)" for v in ESCALA_3.values()]
             + [NOMBRES_MOTIVO[k] for k in MOTIVOS] + list(ABIERTAS.values()))
 # Columnas con las que el tablero filtra la base (dimensión del cubo → columna)
-FILTRO = {"periodo": "Mes", "proceso": "Proceso", "negocio": "Negocio", "region": "Región", "casa": "Casa de cobro",
+FILTRO = {"periodo": "Mes", "proceso": "Proceso", "negocio": "Negocio", "segmento": "Segmento", "region": "Región", "casa": "Casa de cobro",
           "canal": "Canal de comunicación"}
 
 
@@ -41,6 +41,7 @@ def construir(crudo, d):
             texto_opcion(crudo.at[i, "ID_GESTION"]) or "",
             d.at[i, "fecha"].strftime("%Y-%m-%d") if pd.notna(d.at[i, "fecha"]) else "",
             f"{p[:4]}-{p[4:]}", d.at[i, "estudio"] or "", d.at[i, "proceso"] or "", d.at[i, "negocio"] or "",
+            d.at[i, "segmento"] or "",
             d.at[i, "region"], d.at[i, "ciudad"], d.at[i, "casa"], d.at[i, "canal"], d.at[i, "ciclo"],
             _n(d.at[i, "nps"]), d.at[i, "grupo"] if isinstance(d.at[i, "grupo"], str) else "",
             *[_n(d.at[i, k]) for k in ESCALAS],
