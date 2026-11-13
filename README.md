@@ -40,7 +40,8 @@ la sincronización sin escribir nada (`--escribir` la aplica sola).
 - Primera carga (2026-11-13 10:39:08): 891 encuestas nuevas, PYME de sep–oct (576) y noviembre hasta el corte (315).
   La tabla pasó de 2.854 a 3.745 filas.
 
-**Segmento.** Los estudios PYME entran como un segmento aparte (Masivo / PYME) con su propio filtro. Hogar y Móvil los
+**Segmento.** Fijo y Móvil van en «Masivo» y los estudios Fijo PYME y Móvil PYME en «Corporativo» (pedido del usuario
+2026-11-13), con su propio filtro. Hogar y Móvil los
 incluyen salvo que se filtre, así que las cifras de sep–oct cambian frente a la v1.2: octubre NPS Hogar 29,7 → 31,9 y
 Móvil 40,5 → 41,0 (Masivo sigue en 29,7 y 40,5).
 Cada corrida reemplaza solo los meses que encuentra en Oracle. Si el proceso de origen vacía la tabla en un corte futuro,
@@ -112,6 +113,6 @@ etiquetas de factura y pago. Las de cobranza siguen deducidas de los motivos (ac
 ### Supuestos sin confirmar
 
 - Las etiquetas de cobranza (CSAT = información del cobro, CSAT1 = trato) y el umbral 2–3 de seguridad y rapidez.
-- Que «Masivo» sea el nombre correcto para lo que no es PYME, y que PYME se sume a Hogar y Móvil por defecto.
+- Que Corporativo (PYME) se sume a Hogar y Móvil por defecto.
 - El catálogo de códigos de los motivos de Hogar.
 - Las reglas de texto de los dolores: «me llaman demasiado», «me cobran aunque ya pagué», «pago por un servicio que falla», etc.

@@ -46,7 +46,7 @@ def procesar(periodos_pedidos=None, brm=True):
 
     d = limpiar(crudo)
     # Nombres de todo el corte para el tapado de comentarios (en PYME el NOMBRE es la empresa, no la persona)
-    pyme = d.segmento == "PYME"
+    pyme = d.segmento == "Corporativo"
     verbatims.fijar_nombres_globales(list(crudo.NOMBRE_CLIENTE[~pyme]) + list(crudo.NOMBRE_ANALISTA),
                                      list(crudo.NOMBRE_CLIENTE[pyme]))
     if d.periodo.isna().any():

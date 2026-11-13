@@ -46,14 +46,14 @@ CLAVE_CUENTA = "ID_CLIENTE"   # solo para contar en SQL encuestas repetidas por 
 ESTUDIOS = {
     "Factura y Pago Fijo": ("Factura y pago", "Hogar", "Masivo"),
     "Factura y Pago Móvil": ("Factura y pago", "Móvil", "Masivo"),
-    "Factura y Pago Fijo PYME": ("Factura y pago", "Hogar", "PYME"),
-    "Factura y Pago Móvil PYME": ("Factura y pago", "Móvil", "PYME"),
+    "Factura y Pago Fijo PYME": ("Factura y pago", "Hogar", "Corporativo"),
+    "Factura y Pago Móvil PYME": ("Factura y pago", "Móvil", "Corporativo"),
     "Cobranza Fijo": ("Cobranza", "Hogar", "Masivo"),
     "Cobranza Móvil": ("Cobranza", "Móvil", "Masivo"),
 }
 PROCESOS = ["Factura y pago", "Cobranza"]
 NEGOCIOS = ["Hogar", "Móvil"]
-SEGMENTOS = ["Masivo", "PYME"]
+SEGMENTOS = ["Masivo", "Corporativo"]   # Corporativo = estudios PYME (pedido del usuario 2026-11-13)
 
 # ------------------------------------------------------------------ fuente BRM (desde 2026-11-13)
 # El proveedor alimenta cada mes INVITADO_15.TBL_ENCUESTAS_BRM (una fila por encuesta × pregunta) y

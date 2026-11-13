@@ -7,7 +7,7 @@
   (`etl/cargar_brm.py`, que `etl.construir` corre primero). El mes sale de `FECHA_REGISTRADA`.
 - Primera carga: 891 encuestas nuevas (PYME sep–oct y noviembre hasta el corte); las 1.620 de sep–oct que ya estaban
   coinciden con BRM en todas las notas, motivos, comentarios, fechas y regiones.
-- Nuevo filtro «Segmento» (Masivo / PYME), también en la base descargable.
+- Nuevo filtro «Segmento»: Masivo (Fijo y Móvil) y Corporativo (Fijo PYME y Móvil PYME), también en la base descargable.
 - La pregunta CSAT de factura se llama «Satisfacción con el valor facturado», como viene en BRM.
 - Tapado de nombres más estricto: separa los renglones que BRM pega («móvilANGELA») y tapa nombres de cualquier encuesta
   del corte, no solo los del propio cliente (en PYME el NOMBRE es la empresa y el comentario nombra a la persona).

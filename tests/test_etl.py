@@ -157,7 +157,7 @@ def test_brm_arma_una_fila_por_encuesta():
     # Lo armado pasa por la misma limpieza y contrato que el resto de la tabla
     crudo = filas.reindex(columns=COLUMNAS + COLUMNAS_SOLO_LIMPIEZA)
     d = limpiar(crudo)
-    assert list(d.segmento) == ["PYME", "Masivo"] and list(d.negocio) == ["Hogar", "Móvil"] and list(d.va) == [1, 0]
+    assert list(d.segmento) == ["Corporativo", "Masivo"] and list(d.negocio) == ["Hogar", "Móvil"] and list(d.va) == [1, 0]
     assert [c["id"] for c in calidad.evaluar(crudo, d) if c["nivel"] == "error"] == []
 
 
