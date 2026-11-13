@@ -268,6 +268,7 @@ function pintarCtrl() {
       <div class="pop" hidden role="group" aria-label="Meses"><div class="atajos"><button type="button" data-m="ult">Solo el último</button><button type="button" data-m="todos">Todos</button></div>
         ${PERIODOS.map((p, i) => i).reverse().map(i => `<label class="op"><input type="checkbox" value="${i}"${st.meses.includes(i) ? ' checked' : ''}><span>${mesL(PERIODOS[i])}</span><small>${f0(D.periodos[PERIODOS[i]].n)}</small></label>`).join('')}
         <p class="nota" style="margin:6px 8px 2px">Con varios meses, las cifras suman todas sus encuestas y se comparan con los mismos meses justo antes.</p></div></div>
+    <div class="seg seg-cli${st.segmento.size ? '' : ' sin-elegir'}" role="group" aria-label="Segmento" id="f-seg" ${tipAttr('Masivo = Factura y Pago Fijo y Móvil (y cobranza). Corporativo = Factura y Pago Fijo PYME y Móvil PYME. Con «Todos» las cifras mezclan los dos segmentos.')}><span class="et-seg" aria-hidden="true">Segmento</span><button type="button" data-v="" aria-pressed="${!st.segmento.size}">Todos</button>${V.segmento.map((e, i) => `<button type="button" data-v="${i}" aria-pressed="${st.segmento.size === 1 && st.segmento.has(i)}">${e}</button>`).join('')}</div>
     <div class="seg" role="group" aria-label="Proceso" id="f-pro"><button type="button" data-v="" aria-pressed="${st.proceso == null}">Todo</button>${PROC.map((e, i) => `<button type="button" data-v="${i}" aria-pressed="${st.proceso === i}">${e}</button>`).join('')}</div>
     <div class="seg" role="group" aria-label="Negocio" id="f-neg"><button type="button" data-v="" aria-pressed="${st.negocio == null}">Ambos</button>${NEG.map((e, i) => `<button type="button" data-v="${i}" aria-pressed="${st.negocio === i}"><i style="background:${CE[e]}"></i>${e}</button>`).join('')}</div>`;
   const fp_ = ctrl.querySelector('#f-per'), bp = fp_.querySelector('button.sel'), pp = fp_.querySelector('.pop');
@@ -278,11 +279,13 @@ function pintarCtrl() {
     if (!ms.size) { c.checked = true; return; }   // siempre queda al menos un mes
     fijarMeses([...ms]); refrescar({mantener: '__mes'}); }; });
   pp.querySelectorAll('[data-m]').forEach(b => { b.onclick = () => { fijarMeses(b.dataset.m === 'ult' ? [PERIODOS.length - 1] : PERIODOS.map((_, i) => i)); refrescar({mantener: '__mes'}); }; });
+  ctrl.querySelectorAll('#f-seg button').forEach(b => { b.onclick = () => { st.segmento = b.dataset.v === '' ? new Set() : new Set([+b.dataset.v]); refrescar(); }; });
   ctrl.querySelectorAll('#f-pro button').forEach(b => { b.onclick = () => { st.proceso = b.dataset.v === '' ? null : +b.dataset.v; refrescar(); }; });
   ctrl.querySelectorAll('#f-neg button').forEach(b => { b.onclick = () => { st.negocio = b.dataset.v === '' ? null : +b.dataset.v; refrescar(); }; });
 }
 function pintarFiltros() {
-  barF.innerHTML = MULTI.map(([k, et]) => {
+  // El segmento va en la barra de arriba, junto al mes (control propio, resaltado); aquí solo los demás filtros
+  barF.innerHTML = MULTI.filter(([k]) => k !== 'segmento').map(([k, et]) => {
     const n = st[k].size, txt = n === 0 ? et : n === 1 ? `${et}: <b>${esc(V[k][[...st[k]][0]])}</b>` : `${et}: <b>${n}</b>`;
     return `<div class="pill-f" data-k="${k}"><button type="button" class="${n ? 'activo' : ''}" aria-haspopup="true" aria-expanded="false"><span>${n ? '' : '+ '}${txt}</span></button><div class="pop" hidden role="group" aria-label="${et}"></div></div>`;
   }).join('') + `<button type="button" class="limpiar" id="f-limpiar" ${MULTI.some(([k]) => st[k].size) || st.proceso != null || st.negocio != null ? '' : 'hidden'}>Limpiar filtros</button>`;

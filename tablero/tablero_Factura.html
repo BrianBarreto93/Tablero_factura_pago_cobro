@@ -23,6 +23,7 @@
   --ink:#F5F5F7; --ink-2:#A6A6B0; --ink-3:#6E6E78;
   --rojo:#E50914; --rojo-txt:#FF5A61; --rojo-velo:rgba(229,9,20,.16);
   --s-hog:#3987e5; --s-mov:#d95926;
+  --seg:#B79CFF; --seg-txt:#C9B6FF; --seg-velo:rgba(183,156,255,.14); --seg-sobre:#0A0A0C;
   --d-2:#e05a5a; --d-1:#8a3b3b; --d0:#3d3d44; --d1:#2c5288; --d2:#4b95ee;
   --bien:#30D158; --bien-f:rgba(48,209,88,.14); --mal:#FF6B6B; --mal-f:rgba(255,107,107,.14); --ojo:#FFD60A; --ojo-f:rgba(255,214,10,.14);
   --sombra:0 24px 60px rgba(0,0,0,.55);
@@ -34,6 +35,7 @@
   --ink:#191919; --ink-2:#5F5E5B; --ink-3:#8F8E8A;
   --rojo:#DA101A; --rojo-txt:#B00D16; --rojo-velo:rgba(218,16,26,.08);
   --s-hog:#2a78d6; --s-mov:#eb6834;
+  --seg:#6D28D9; --seg-txt:#5B21B6; --seg-velo:rgba(109,40,217,.08); --seg-sobre:#FFFFFF;
   --d-2:#b3302f; --d-1:#e98a88; --d0:#d6d5cf; --d1:#86b6ef; --d2:#256abf;
   --bien:#0A7339; --bien-f:#E1F3E7; --mal:#B3121B; --mal-f:#FDEAEA; --ojo:#7A5200; --ojo-f:#FFF1C7;
   --sombra:0 24px 60px rgba(15,15,15,.16);
@@ -90,7 +92,8 @@ button{cursor:pointer}
 .tema{height:30px;padding:0 12px;border-radius:999px;border:1px solid var(--line-2);background:var(--panel);color:var(--ink);display:inline-flex;align-items:center;gap:6px;font:700 12px var(--f-ui);white-space:nowrap}
 .tema svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round}
 .tema:hover{border-color:var(--ink-3)}
-@media (max-width:1500px){.tema{width:30px;padding:0;justify-content:center}.tema .tx{display:none}}
+@media (max-width:1500px){.tema{width:30px;padding:0;justify-content:center}.tema .tx{display:none}
+  .dl>button{width:30px;padding:0;justify-content:center}.dl>button .tx{display:none}}
 @media (max-width:760px){.dl{margin-left:0}}
 .ctrl{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .fila-filtros{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}
@@ -102,6 +105,14 @@ button{cursor:pointer}
 .seg button:hover{color:var(--ink)}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
 .seg i,.punto{display:inline-block;width:8px;height:8px;border-radius:50%}
+/* Segmento: junto al mes y en violeta (color que no usa ningún dato) para que no se olvide filtrarlo */
+.seg-cli{border:1.5px solid var(--seg);background:var(--seg-velo);align-items:center}
+.seg-cli .et-seg{padding:0 6px 0 10px;font:900 10.5px var(--f-ui);letter-spacing:.06em;text-transform:uppercase;color:var(--seg-txt);white-space:nowrap}
+.seg-cli button{color:var(--seg-txt)}
+.seg-cli button:hover{color:var(--ink)}
+.seg-cli button[aria-pressed="true"]{background:var(--seg);color:var(--seg-sobre)}
+.seg-cli.sin-elegir{animation:seg-pulso 2.4s var(--ease) 3}
+@keyframes seg-pulso{0%,100%{box-shadow:0 0 0 0 var(--seg-velo)}50%{box-shadow:0 0 0 6px var(--seg-velo)}}
 .icono{width:32px;height:32px;border-radius:50%;border:1px solid var(--line-2);background:var(--panel);display:grid;place-items:center;padding:0}
 .icono svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round}
 

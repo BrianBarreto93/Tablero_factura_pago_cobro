@@ -41,7 +41,7 @@ la sincronización sin escribir nada (`--escribir` la aplica sola).
   La tabla pasó de 2.854 a 3.745 filas.
 
 **Segmento.** Fijo y Móvil van en «Masivo» y los estudios Fijo PYME y Móvil PYME en «Corporativo» (pedido del usuario
-2026-11-13), con su propio filtro. Hogar y Móvil los
+2026-11-13). El filtro va junto al mes, en violeta, para que no se olvide elegirlo. Hogar y Móvil los
 incluyen salvo que se filtre, así que las cifras de sep–oct cambian frente a la v1.2: octubre NPS Hogar 29,7 → 31,9 y
 Móvil 40,5 → 41,0 (Masivo sigue en 29,7 y 40,5).
 Cada corrida reemplaza solo los meses que encuentra en Oracle. Si el proceso de origen vacía la tabla en un corte futuro,

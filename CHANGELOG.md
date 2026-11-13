@@ -1,5 +1,12 @@
 # Cambios
 
+## 2026-11-13 · v2.1
+
+- El filtro de segmento sale de las pastillas y queda junto al mes, como botones «Todos · Masivo · Corporativo» en violeta
+  (un color que no usa ningún dato). Mientras está en «Todos» late suave tres veces al abrir, para recordar que las cifras
+  mezclan los dos segmentos.
+- Entre 1300 y 1500 px el botón «Descargar base» queda solo con el ícono, para que la barra quepa en una línea.
+
 ## 2026-11-13 · v2
 
 - Factura y pago cambia de fuente: ahora llega cada mes desde `TBL_ENCUESTAS_BRM` (estudios Factura y Pago Fijo, Móvil,
