@@ -469,6 +469,41 @@ details.cods .barra .et{font-weight:600;color:var(--ink-2)}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 @media print{.rail,.top{display:none}.app{display:block}}
 </style>
+<link rel="stylesheet" href="graficos.css">
+<style>
+/* ===== Ajustes del tablero sobre graficos.css (van después para ganarle) ===== */
+.kpi .et{padding-right:62px}
+.kpi .g-anillo{z-index:1}
+.pesa .riel{top:10px;height:6px;border-radius:3px;opacity:.42}
+:root[data-theme="dark"] .pesa .riel{opacity:.62}
+.pesa .pt{box-shadow:0 0 0 1px rgba(0,0,0,.10),0 2px 7px rgba(0,0,0,.28)}
+.g-pt{transform-box:fill-box;transform-origin:center}
+.chart .g-area{pointer-events:none;opacity:.7}
+.kpi .g-spark path[data-fx]{opacity:.75}
+.pz .pt{transform:none;margin:-6.5px 0 0 -6.5px}
+.dh-num b>.g-cuenta,.dh-pts b>.g-cuenta{font:inherit;letter-spacing:inherit;text-transform:none;color:inherit}
+.dh-pista .flujo{box-shadow:0 0 14px color-mix(in srgb,var(--t8) 35%,transparent)}
+.par-torres{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 22px}
+.par-torres>div{min-width:0}
+.par-torres h3,.sub-t{margin:0 0 6px;font:800 13px var(--f-ui)}
+.sub-t{margin-top:16px}
+.par-torres .g-torres{gap:10px}
+.par-torres .g-torre-c{height:200px}
+.dona-panel .g-donas{margin-top:18px}
+.radial-resto{margin:6px 0 0}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g3 .g-paleta{grid-template-columns:minmax(0,1.4fr) minmax(50px,1fr) 52px}
+.g3 .g-paleta .et{-webkit-line-clamp:3}
+@media (max-width:1100px){.g3{grid-template-columns:minmax(0,1fr)}}
+.radial-angosto .g-radial{grid-template-columns:minmax(96px,130px) minmax(0,1fr);gap:12px}
+.radial-angosto .g-radial-l span{white-space:normal;line-height:1.2}
+@media (max-width:1300px){.kpi .g-anillo{width:46px;height:46px}.kpi .et{padding-right:52px}}
+@media (max-width:760px){
+  .kpi .g-anillo{width:40px;height:40px;top:10px;right:10px}
+  .kpi .et{padding-right:44px}
+}
+@media (max-width:520px){.par-torres{grid-template-columns:minmax(0,1fr)}}
+</style>
 </head>
 <body>
 <div class="app">
@@ -501,6 +536,8 @@ details.cods .barra .et{font-weight:600;color:var(--ink-2)}
 <div id="tip" role="tooltip"></div>
 <script src="datos.js"></script>
 <script src="exportar.js"></script>
+<script src="vendor/motion.js"></script>
+<script src="graficos.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

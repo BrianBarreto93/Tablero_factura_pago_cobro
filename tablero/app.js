@@ -159,7 +159,9 @@ function cargarComentarios() {
     const notas = cm.campos.slice(ND, cm.campos.indexOf('pregunta'));
     C = cm.filas.map(f => { const v = {r: f, preg: D.cod_preguntas[f[ix.pregunta]], texto: f[ix.texto]}; notas.forEach(k => { v[k] = f[ix[k]]; }); return v; });
     delete window.COMENTARIOS;
-    pintarTab(); if (cajon.dataset.k) abrirCajon(cajon.dataset.k, false);
+    // Solo se rehacen los carruseles: repintar toda la pestaña reiniciaría las animaciones de los gráficos
+    if (st.tab === 'voz' || st.tab === 'calidad') pintarTab(); else rehacerCarruseles(document.getElementById('p-' + st.tab));
+    if (cajon.dataset.k) abrirCajon(cajon.dataset.k, false, true);
   };
   s.onerror = () => { C = []; pintarTab(); };
   document.body.appendChild(s);
@@ -228,14 +230,26 @@ function carrusel(id, lentes, titulo) {
   const e = carEst[id], ej = ejemplos(e.lente);
   const cards = ej == null ? Array(5).fill('<div class="esqueleto" aria-hidden="true"></div>').join('') :
     ej.items.length ? ej.items.map(v => tarjeta(v)).join('') : '<p class="vacio">Sin comentarios con estos filtros</p>';
-  return `<section class="panel" data-car="${id}"><header><h2>${titulo || 'Lo que dicen los clientes'} <span class="nota" style="font-weight:600;margin-left:6px" ${tipAttr('Ejemplos variados por proceso, negocio y pregunta, con los filtros actuales. Clic en una tarjeta para leerla completa. Datos personales tapados.')}>${ej ? `${f0(ej.total)} comentarios · ${ej.items.length} ejemplos` : 'cargando…'}</span></h2>
+  return `<section class="panel" data-car="${id}" data-lentes="${lentes.join('|')}"${titulo ? ` data-tit="${esc(titulo)}"` : ''}><header><h2>${titulo || 'Lo que dicen los clientes'} <span class="nota" style="font-weight:600;margin-left:6px" ${tipAttr('Ejemplos variados por proceso, negocio y pregunta, con los filtros actuales. Clic en una tarjeta para leerla completa. Datos personales tapados.')}>${ej ? `${f0(ej.total)} comentarios · ${ej.items.length} ejemplos` : 'cargando…'}</span></h2>
       <div class="seg" role="group" aria-label="Tipo de comentario">${lentes.map(l => `<button type="button" data-lente="${l}" aria-pressed="${e.lente === l}">${LENTES[l].t}</button>`).join('')}</div>
 </header>
     <div class="voces"><button type="button" class="flecha izq" aria-label="Anteriores">${svgI('izq')}</button><div class="riel-v">${cards}</div><button type="button" class="flecha der" aria-label="Siguientes">${svgI('der')}</button></div></section>`;
 }
+// Rehace los carruseles (o solo el de id «soloId») sin tocar el resto de la pestaña
+function rehacerCarruseles(raiz, soloId) {
+  const proc = {factura: FP, pago: FP, cobranza: COB}[st.tab];
+  const f = () => raiz.querySelectorAll('[data-car]').forEach(sec => {
+    if (soloId && sec.dataset.car !== soloId) return;
+    const t = document.createElement('div');
+    t.innerHTML = carrusel(sec.dataset.car, sec.dataset.lentes.split('|'), sec.dataset.tit || undefined);
+    sec.parentNode.replaceChild(t.firstElementChild, sec);
+  });
+  if (proc != null) conProceso(proc, f); else f();
+  montarCarrusel(raiz);
+}
 function montarCarrusel(raiz) {
   raiz.querySelectorAll('[data-car]').forEach(p => {
-    p.querySelectorAll('[data-lente]').forEach(b => { b.onclick = () => { carEst[p.dataset.car].lente = b.dataset.lente; pintarTab(); }; });
+    p.querySelectorAll('[data-lente]').forEach(b => { b.onclick = () => { carEst[p.dataset.car].lente = b.dataset.lente; rehacerCarruseles(raiz, p.dataset.car); }; });
     const riel = p.querySelector('.riel-v');
     p.querySelector('.izq').onclick = () => riel.scrollBy({left: -riel.clientWidth * .9, behavior: 'smooth'});
     p.querySelector('.der').onclick = () => riel.scrollBy({left: riel.clientWidth * .9, behavior: 'smooth'});
@@ -256,6 +270,9 @@ document.addEventListener('mousemove', e => { const t = cercano(e, '[data-tip]')
 document.addEventListener('focusin', e => { const t = cercano(e, '[data-tip]'); if (t) { const b = t.getBoundingClientRect(); verTip(t.dataset.tip, b.left, b.bottom); } });
 document.addEventListener('focusout', () => tip.classList.remove('ver'));
 const tipAttr = html => `data-tip="${esc(html)}"`;
+GRAF.config({tip: tipAttr});
+// Cifra grande que cuenta desde 0 al entrar en pantalla (mismo texto final que fmtGrande)
+const grandeAn = (k, r) => r == null ? '—' : `${GRAF.cuenta(r.v, 1)}<small>${k === 'nps' ? 'pts' : '%'}</small>`;
 const tipInd = (k, r, extra) => r == null ? 'Sin respuestas válidas' :
   `<div class="t">${IND[k].nombre}: ${fmt(k, r)}</div>n = ${f0(r.n)} · IC 95 % ±${f1(r.ic)} ${unidad(k)}${r.n < NMIN ? '<br><b>Muestra baja</b>: lectura indicativa' : ''}${extra || ''}`;
 const bajo = r => r && r.n < NMIN ? ' <span class="bajo">muestra baja</span>' : '';
@@ -338,22 +355,44 @@ function delta(k, act, ant, etq) {
   const d = act.v - ant.v, c = Math.abs(d) < .05 ? 'igual' : d > 0 ? 'mejora' : 'empeora';
   return `<span class="delta ${c}" ${tipAttr(`${etq}: ${fmt(k, ant)} · n ${f0(ant.n)}`)}>${c === 'igual' ? '■' : d > 0 ? '▲' : '▼'} ${fpp(d)} ${unidad(k)}<span class="sr"> ${c === 'mejora' ? 'mejora' : c === 'empeora' ? 'empeora' : 'igual'}</span></span><span class="nota">vs ${etq}</span>`;
 }
+// Spark de área animado: una serie por negocio con su color, marcas en los meses elegidos
 function spark(k) {
-  const lines = negs().map(e => ({e, pts: serie(k, 'mes', e)})).filter(s => s.pts.length > 1);
-  if (!lines.length) return '';
-  const W = 200, H = 34, all = [].concat.apply([], lines.map(s => s.pts.map(p => p.r.v))), lo = Math.min.apply(null, all), hi = Math.max.apply(null, all), rg = hi - lo || 1, n = PERIODOS.length;
-  const X = i => 3 + (W - 6) * i / Math.max(1, n - 1);
-  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${st.meses.map(m => `<line x1="${X(m)}" x2="${X(m)}" y1="0" y2="${H}" stroke="var(--eje)" stroke-dasharray="2 3" vector-effect="non-scaling-stroke"/>`).join('')}${lines.map(s =>
-    `<polyline fill="none" stroke="${CE[NEG[s.e]]}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" points="${s.pts.map(p => X(p.x) + ',' + (3 + (H - 6) * (1 - (p.r.v - lo) / rg))).join(' ')}"/>`).join('')}</svg>`;
+  const lines = negs().map(e => ({color: CE[NEG[e]], pts: serie(k, 'mes', e).map(p => ({i: p.x, v: p.r.v}))})).filter(s => s.pts.length > 1);
+  // Las áreas del spark se animan con svgFx (ver abajo): con Motion, «aparece» en SVG se queda invisible
+  return lines.length ? GRAF.spark(lines, PERIODOS.length, st.meses).replace(/data-an="aparece"/g, 'data-fx="aparece"') : '';
 }
-// Pesa: riel de min a max con un punto por negocio (hueco si la muestra es baja) y una marca del total
+// Animación propia para elementos SVG (aparece / pop) con la Web Animations API nativa.
+// Motion escribe opacity y transform como ATRIBUTOS en SVG, y el estilo en línea de arranque de GRAF los tapa.
+function svgFx(raiz, o) {
+  o = o || {};
+  if (!raiz || !GRAF.activo()) return;
+  const grupos = new Map();
+  raiz.querySelectorAll('[data-fx]').forEach(el => {
+    const c = el.closest('.kpi, .panel') || raiz;
+    el.style.opacity = '0';
+    if (!grupos.has(c)) grupos.set(c, []);
+    grupos.get(c).push(el);
+  });
+  const ir = lista => lista.forEach(el => {
+    const t = el.getAttribute('data-fx'), del = ((o.base || 0) + +(el.getAttribute('data-i') || 0) * .05) * 1000;
+    el.style.opacity = '';
+    const fin = +getComputedStyle(el).opacity;   // termina en la opacidad que le da el CSS
+    if (t === 'pop') el.animate([{opacity: 0, transform: 'scale(.2)'}, {opacity: 1, transform: 'scale(1.35)', offset: .65}, {opacity: 1, transform: 'scale(1)'}], {duration: 650, delay: del + 250, easing: 'ease-out', fill: 'backwards'});
+    else el.animate([{opacity: 0}, {opacity: fin}], {duration: 750, delay: del + 200, easing: 'ease-out', fill: 'backwards'});
+  });
+  grupos.forEach((lista, c) => { if (o.inmediato || !window.Motion || !Motion.inView) ir(lista); else Motion.inView(c, () => { ir(lista); }, {amount: .12}); });
+}
+addEventListener('beforeprint', () => { document.querySelectorAll('[data-fx]').forEach(el => { el.getAnimations().forEach(x => x.finish()); el.style.opacity = ''; }); });
+// La opacidad del riel va en el CSS (distinta en claro y oscuro)
+const RAMPA = GRAF.rampaCss().replace(/;opacity:[^;]*/, '');
+// Pesa: riel con la rampa rojo → verde de min a max, un punto por negocio (hueco si la muestra es baja) y una marca del total
 function pesa(k, rs, tot) {
   const ind = IND[k], X = v => (v - ind.min) / (ind.max - ind.min) * 100, ok = rs.filter(Boolean);
-  let s = `<div class="pesa" role="img" aria-label="${ind.nombre}: ${NEG.map((e, i) => e + ' ' + fmt(k, rs[i])).join(', ')}"><span class="riel"></span>`;
+  let s = `<div class="pesa" role="img" aria-label="${ind.nombre}: ${NEG.map((e, i) => e + ' ' + fmt(k, rs[i])).join(', ')}"><span class="riel" style="${RAMPA}"></span>`;
   if (ind.min < 0) s += `<span class="cero" style="left:${X(0)}%"></span>`;
   if (ok.length === 2) s += `<span class="une" style="left:${Math.min(X(rs[0].v), X(rs[1].v))}%;width:${Math.abs(X(rs[0].v) - X(rs[1].v))}%"></span>`;
   if (tot && ok.length > 1) s += `<span class="tot" style="left:${X(tot.v)}%"></span>`;
-  rs.forEach((r, i) => { if (r) s += `<span class="pt${r.n < NMIN ? ' hueco' : ''}" style="left:${X(r.v)}%;background:${CE[NEG[i]]};${r.n < NMIN ? 'border-color:' + CE[NEG[i]] : ''}" ${tipAttr(tipInd(k, r, `<br>${NEG[i]}`))}></span>`; });
+  rs.forEach((r, i) => { if (r) s += `<span class="pt${r.n < NMIN ? ' hueco' : ''}" style="left:${X(r.v)}%;background:${CE[NEG[i]]};${r.n < NMIN ? 'border-color:' + CE[NEG[i]] : ''}" data-an="desliza" data-desde="0%" data-i="${i + 1}" ${tipAttr(tipInd(k, r, `<br>${NEG[i]}`))}></span>`; });
   return s + '</div>';
 }
 // Gráfico de líneas: se dibuja después de insertar el HTML, con el tamaño real del contenedor
@@ -373,61 +412,63 @@ function dibujarLineas(raiz) {
     lo = Math.max(IND[k].min, Math.floor((lo - pad) / 10) * 10); hi = Math.min(IND[k].max, Math.ceil((hi + pad) / 10) * 10);
     const X = i => xs.length === 1 ? (L + W - R) / 2 : L + (W - L - R) * i / (xs.length - 1), Y = v => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
     const paso = hi - lo > 60 ? 20 : 10, cada = Math.max(1, Math.ceil(xs.length / Math.max(2, Math.floor((W - L - R) / 52))));
-    let s = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">`;
+    const id = el.id || 'lin', yB = H - B;
+    // Franja junto al eje Y con la rampa: dónde queda lo malo (rojo) y lo bueno (verde) en este tramo de la escala
+    let s = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true" data-guia><defs>${GRAF.gradY(id + '-y', lo, hi, IND[k].min, IND[k].max)}${S.map((sr, j) => GRAF.gradArea(id + '-a' + j, CE[sr.e])).join('')}</defs>`;
+    s += `<rect class="g-rampa-y" x="${L - 5}" y="${T}" width="3.5" height="${yB - T}" rx="1.75" style="fill:url(#${id}-y)" data-fx="aparece"/>`;
     if (modo === 'mes') st.meses.filter(m => xs.includes(m)).forEach(m => { s += `<rect x="${X(xs.indexOf(m)) - 16}" y="${T - 6}" width="32" height="${H - T - B + 12}" rx="10" fill="var(--panel-2)"/>`; });
     for (let v = Math.ceil(lo / paso) * paso; v <= hi; v += paso) s += `<line class="grid" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L - 8}" y="${Y(v) + 4}" text-anchor="end">${f0(v)}</text>`;
     if (lo < 0 && hi > 0) s += `<line class="eje" x1="${L}" x2="${W - R}" y1="${Y(0)}" y2="${Y(0)}"/>`;
     xs.forEach((x, i) => { if (i % cada === 0 || i === xs.length - 1) s += `<text x="${X(i)}" y="${H - 6}" text-anchor="middle"${modo === 'mes' && st.meses.includes(x) ? ' style="fill:var(--ink);font-weight:800"' : ''}>${esc(etq(x))}</text>`; });
+    s += `<line class="g-guia-l" x1="${L}" x2="${L}" y1="${T}" y2="${yB}"/>`;
     const etqs = [];
-    for (const {e, pts} of S) {
-      const c = CE[e], pos = pts.map(p => [X(xs.indexOf(p.x)), Y(p.r.v), p]);
-      s += `<polyline fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" points="${pos.map(q => q[0] + ',' + q[1]).join(' ')}"/>`;
-      s += pos.map(([x, y, p]) => `<circle cx="${x}" cy="${y}" r="4" fill="${p.r.n < NMIN ? 'var(--panel)' : c}" stroke="${p.r.n < NMIN ? c : 'var(--panel)'}" stroke-width="2"/>`).join('');
+    // Primero las áreas (debajo), luego líneas y puntos encima
+    const P = S.map(({e, pts}) => ({e, c: CE[e], pos: pts.map(p => [X(xs.indexOf(p.x)), Y(p.r.v), p])}));
+    P.forEach(({pos}, j) => {
+      if (pos.length < 2) return;
+      const d = pos.map((q, i) => (i ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join(' ');
+      s += `<path class="g-area" d="${d} L${ultimo(pos)[0].toFixed(1)} ${yB} L${pos[0][0].toFixed(1)} ${yB} Z" style="fill:url(#${id}-a${j})" data-fx="aparece" data-i="${j + 16}"/>`;
+    });
+    P.forEach(({c, pos}, j) => {
+      if (pos.length > 1) s += `<path d="${pos.map((q, i) => (i ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join(' ')}" pathLength="1" fill="none" stroke="${c}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" data-an="traza" data-i="${j}"/>`;
+      s += pos.map(([x, y, p], i) => `<circle class="g-pt" data-x="${p.x}" cx="${x}" cy="${y}" r="4" fill="${p.r.n < NMIN ? 'var(--panel)' : c}" stroke="${p.r.n < NMIN ? c : 'var(--panel)'}" stroke-width="2" data-fx="pop" data-i="${j * 2 + i * 3}"/>`).join('');
       const u = ultimo(pos); etqs.push({x: u[0] + 9, y: u[1] + 4, t: fmt(k, u[2].r)});
-    }
+    });
     // Etiquetas finales: si dos quedan muy cerca, se separan en vertical (14 px)
     etqs.sort((a, b) => a.y - b.y);
     for (let i = 1; i < etqs.length; i++) if (etqs[i].y - etqs[i - 1].y < 14) etqs[i].y = etqs[i - 1].y + 14;
-    s += etqs.map(q => `<text class="val" x="${q.x}" y="${q.y}">${q.t}</text>`).join('');
+    s += etqs.map((q, j) => `<text class="val" x="${q.x}" y="${q.y}" data-fx="aparece" data-i="${22 + j}">${q.t}</text>`).join('');
     xs.forEach((x, i) => {
       const x0 = i ? (X(i - 1) + X(i)) / 2 : L, x1 = i < xs.length - 1 ? (X(i) + X(i + 1)) / 2 : W - R;
       const t = S.map(({e, pts}) => { const p = pts.find(p => p.x === x); return p ? `<i style="background:${CE[e]}"></i>${e}: <b>${fmt(k, p.r)}</b> · n ${f0(p.r.n)}${p.r.n < NMIN ? ' (muestra baja)' : ''}` : ''; }).filter(Boolean).join('<br>');
-      s += `<rect class="hit" x="${x0}" y="${T}" width="${x1 - x0}" height="${H - T - B}" ${tipAttr(`<div class="t">${esc(etq(x))}</div>${t}`)}/>`;
+      s += `<rect class="hit" x="${x0}" y="${T}" width="${x1 - x0}" height="${H - T - B}" data-x="${x}" data-cx="${X(i)}" ${tipAttr(`<div class="t">${esc(etq(x))}</div>${t}`)}/>`;
     });
     el.innerHTML = s + '</svg>';
+    GRAF.guia(el);
     if (tabla) tabla.innerHTML = `<table class="rk"><thead><tr><th>${modo === 'mes' ? 'Mes' : 'Semana'}</th>${S.map(s => `<th class="num">${s.e}</th><th class="num">n</th>`).join('')}</tr></thead><tbody>${xs.map(x => `<tr><td>${esc(etq(x))}</td>${S.map(s => { const p = s.pts.find(p => p.x === x); return `<td class="num">${p ? fmt(k, p.r) : '—'}</td><td class="num">${p ? f0(p.r.n) : '—'}</td>`; }).join('')}</tr>`).join('')}</tbody></table>`;
   });
 }
-// Distribución 1–5 centrada en el 3: a la izquierda lo malo, a la derecha lo bueno
-const C5 = ['var(--d-2)', 'var(--d-1)', 'var(--d0)', 'var(--d1)', 'var(--d2)'];
+// Distribuciones: cada escala con su gráfico, coloreada de la peor respuesta (rojo intenso) a la mejor (verde sobrio)
+const finInd = (k, a) => `${fmt(k, IND[k].calc(a))}<small>${IND[k].corto}</small>`;
+// 1–5: barras divergentes centradas en el 3 que crecen desde el centro
 function divergente(grupos, k) {
-  const P = grupos.map(g => { const t = [1, 2, 3, 4, 5].map(i => g.a[k + '_' + i]), n = t.reduce((x, y) => x + y, 0); return Object.assign({}, g, {t, n, p: t.map(x => n ? x / n * 100 : 0)}); }).filter(g => g.n);
-  if (!P.length) return `<p class="vacio">Sin respuestas con estos filtros</p>`;
-  const izq = Math.max.apply(null, P.map(g => g.p[0] + g.p[1] + g.p[2] / 2)), der = Math.max.apply(null, P.map(g => g.p[4] + g.p[3] + g.p[2] / 2)), tot = izq + der;
-  return `<div class="leyenda">${[1, 2, 3, 4, 5].map((q, i) => `<span><i style="background:${C5[i]}"></i>${q}${i === 0 ? ' · la peor' : i === 4 ? ' · la mejor' : ''}</span>`).join('')}</div>` + P.map(g => {
-    const off = (izq - (g.p[0] + g.p[1] + g.p[2] / 2)) / tot * 100;
-    return `<div class="apil"><div class="et">${esc(g.nombre)}<small>n ${f0(g.n)}</small></div><div class="tira" style="padding-left:${off}%" role="img" aria-label="${esc(g.nombre)}: ${g.p.map((p, i) => (i + 1) + ': ' + f1(p) + ' %').join(', ')}">${g.p.map((p, i) => `<span class="${i === 2 ? 'osc' : ''}" style="width:${p / tot * 100}%;background:${C5[i]}" ${tipAttr(`<div class="t">${esc(g.nombre)} · nota ${i + 1}</div>${f1(p)} % (${f0(g.t[i])} de ${f0(g.n)})`)}>${p / tot * 100 > 7 ? f0(p) + '%' : ''}</span>`).join('')}<span class="centro" style="left:${izq / tot * 100}%"></span></div><div class="fin">${fmt(k, IND[k].calc(g.a))}<small>${IND[k].corto}</small></div></div>`;
-  }).join('');
+  return GRAF.divergente(grupos.map(g => ({nombre: g.nombre, cuentas: [1, 2, 3, 4, 5].map(i => g.a[k + '_' + i]), fin: finInd(k, g.a)})), ['1 · la peor', '2', '3', '4', '5 · la mejor']);
 }
-function apilada(grupos, partes, k) {
-  const gs = grupos.filter(g => partes.some(p => p.v(g.a)));
-  if (!gs.length) return `<p class="vacio">Sin respuestas con estos filtros</p>`;
-  return `<div class="leyenda">${partes.map(p => `<span><i style="background:${p.c}"></i>${p.t}</span>`).join('')}</div>` + gs.map(g => {
-    const c = partes.map(p => p.v(g.a)), n = c.reduce((x, y) => x + y, 0) || 1;
-    return `<div class="apil"><div class="et">${esc(g.nombre)}<small>n ${f0(n)}</small></div><div class="tira">${c.map((x, i) => `<span class="${partes[i].osc ? 'osc' : ''}" style="width:${x / n * 100}%;background:${partes[i].c}" ${tipAttr(`<div class="t">${esc(g.nombre)} · ${partes[i].t}</div>${f1(x / n * 100)} % (${f0(x)})`)}>${x / n > .07 ? f0(x / n * 100) + '%' : ''}</span>`).join('')}</div><div class="fin">${fmt(k, IND[k].calc(g.a))}<small>${IND[k].corto}</small></div></div>`;
-  }).join('');
-}
-const PARTES = {
-  nps: [{t: 'Detractores 0–6', c: 'var(--d-2)', v: a => a.det}, {t: 'Pasivos 7–8', c: 'var(--d0)', osc: true, v: a => a.nps_val - a.det - a.prom}, {t: 'Promotores 9–10', c: 'var(--d2)', v: a => a.prom}],
-  va: [{t: 'No cuadran', c: 'var(--d-2)', v: a => a.va_no}, {t: 'Sí cuadran', c: 'var(--d2)', v: a => a.va_si}],
-  seg: [{t: '1 · la peor', c: 'var(--d-2)', v: a => a.seg_1}, {t: '2', c: 'var(--d1)', v: a => a.seg_2}, {t: '3', c: 'var(--d2)', v: a => a.seg_3}],
-  rap: [{t: '1 · la peor', c: 'var(--d-2)', v: a => a.rap_1}, {t: '2', c: 'var(--d1)', v: a => a.rap_2}, {t: '3', c: 'var(--d2)', v: a => a.rap_3}],
-};
-const distribucion = (k, grupos) => IND[k].tipo === 'esc5' ? divergente(grupos, k) : apilada(grupos, PARTES[k], k);
-function barras(items, base, color) {
+// Recomendación: waffle de 100 cuadritos (detractores, pasivos, promotores)
+const waffleNps = grupos => GRAF.waffle(grupos.map(g => ({nombre: g.nombre, cuentas: [g.a.det, g.a.nps_val - g.a.det - g.a.prom, g.a.prom], fin: finInd('nps', g.a)})), ['Detractores 0–6', 'Pasivos 7–8', 'Promotores 9–10']);
+// Valores acordes: donas no / sí
+// El centro ya es el indicador (con un decimal): no se repite debajo
+const donasVa = grupos => GRAF.donas(grupos.map(g => ({nombre: g.nombre, cuentas: [g.a.va_no, g.a.va_si]})), ['No cuadran', 'Sí cuadran'], {centro: 'cuadran', dec: 1});
+// Seguridad y rapidez (1–3): torres apiladas en vertical
+const torres3 = (grupos, k) => GRAF.torres(grupos.map(g => ({nombre: g.nombre, cuentas: [g.a[k + '_1'], g.a[k + '_2'], g.a[k + '_3']], fin: fmt(k, IND[k].calc(g.a))})), ['1 · la peor', '2', '3 · la mejor'], {tonos: [GRAF.tono(0), GRAF.tono(.75), GRAF.tono(1)]});   // el 2 cuenta como respuesta buena
+const distribucion = (k, grupos) => IND[k].tipo === 'esc5' ? divergente(grupos, k) : k === 'nps' ? waffleNps(grupos) : k === 'va' ? donasVa(grupos) : torres3(grupos, k);
+// Motivos: paletas (lollipop) de la más frecuente a la menos; los códigos sin catálogo y «Otro» al final, en gris
+const ordenMot = items => items.slice().sort((a, b) => (a.cod - b.cod) || ((a.nombre === 'Otro') - (b.nombre === 'Otro')) || (b.c - a.c));
+// Canales: barras radiales (hasta 7 arcos); si hay más, los restantes van en una línea aparte con sus cifras
+function canalesRadial(items, base) {
   if (!items.length || !base) return '<p class="vacio">Sin datos</p>';
-  const max = Math.max.apply(null, items.map(x => x.c));
-  return `<div class="barras">${items.map(x => `<div class="barra${x.cod ? ' cod' : ''}" ${tipAttr(`<div class="t">${esc(x.nombre)}</div>${f0(x.c)} de ${f0(base)} (${f1(x.c / base * 100)} %)`)}><span class="et" title="${esc(x.nombre)}">${esc(x.nombre)}</span><span class="p"><b style="width:${x.c / max * 100}%;background:${color(x)}"></b></span><span class="num">${f1(x.c / base * 100)} %<small>${f0(x.c)}</small></span></div>`).join('')}</div>`;
+  const resto = items.slice(7);
+  return GRAF.radial(items.slice(0, 7), base) + (resto.length ? `<p class="nota radial-resto">Además: ${resto.map(x => `<span ${tipAttr(`<div class="t">${esc(x.nombre)}</div>${f0(x.c)} de ${f0(base)} (${f1(x.c / base * 100)} %)`)}>${esc(x.nombre)} ${f1(x.c / base * 100)} % (${f0(x.c)})</span>`).join(' · ')}</p>` : '');
 }
 // Motivos cerrados de una pregunta: % sobre las encuestas que dieron al menos un motivo
 function motivos(k, idx) {
@@ -441,9 +482,8 @@ function panelMotivos(k, titulo, sub, idx) {
   const ixM = idx.filter(i => D.cubo[i][DI.negocio] === M), ixH = idx.filter(i => D.cubo[i][DI.negocio] === H);
   const bM = sumar(ixM)['mot_' + k], bH = sumar(ixH)['mot_' + k];
   const itM = motivos(k, ixM), itH = motivos(k, ixH);
-  const color = x => x.cod ? 'var(--ink-3)' : 'var(--d-2)';
-  const movil = bM ? `${barras(itM, bM, color)}` : `<p class="vacio">${st.negocio === H ? 'Con el filtro Hogar solo hay motivos en código: ábrelos abajo.' : 'Sin motivos con estos filtros'}</p>`;
-  const hogar = bH ? `<details class="cods"${st.negocio === H ? ' open' : ''}><summary>Hogar: ${f0(bH)} encuestas con el motivo en código</summary>${barras(itH, bH, () => 'var(--ink-3)')}<p class="nota motivo-nota">Hogar entrega el motivo como número (1, 2… 94) y falta el catálogo para traducirlo.</p></details>` : '';
+  const movil = bM ? GRAF.paletas(ordenMot(itM), bM) : `<p class="vacio">${st.negocio === H ? 'Con el filtro Hogar solo hay motivos en código: ábrelos abajo.' : 'Sin motivos con estos filtros'}</p>`;
+  const hogar = bH ? `<details class="cods"${st.negocio === H ? ' open' : ''}><summary>Hogar: ${f0(bH)} encuestas con el motivo en código</summary>${GRAF.paletas(ordenMot(itH), bH, {color: () => 'var(--ink-3)'})}<p class="nota motivo-nota">Hogar entrega el motivo como número (1, 2… 94) y falta el catálogo para traducirlo.</p></details>` : '';
   return `<section class="panel"><header><h2>${titulo}</h2><p class="sub">${sub} · Móvil: % sobre ${f0(bM)} encuestas que dieron un motivo (puede elegir varios).</p></header>
     <div class="largas">${movil}</div>${hogar}</section>`;
 }
@@ -464,17 +504,20 @@ function ranking(id, k, dims, tope) {
     <div class="herr"><div class="seg" role="group" aria-label="Abrir por">${dims.map(([d, t]) => `<button type="button" data-dim="${d}" aria-pressed="${e.dim === d}">${t}</button>`).join('')}</div>
     <div class="seg" role="group" aria-label="Ordenar"><button type="button" data-ord="n" aria-pressed="${e.orden === 'n'}">Volumen</button><button type="button" data-ord="peor" aria-pressed="${e.orden === 'peor'}">Peor</button><button type="button" data-ord="mejor" aria-pressed="${e.orden === 'mejor'}">Mejor</button></div></div></header>
     <div class="tw"><table class="rk"><caption class="sr">${ind.nombre} por ${nomDim}</caption><thead><tr><th>${nomDim}</th><th class="num">n</th><th class="num">${ind.corto}</th><th><span aria-hidden="true">│ total ${fmt(k, tot)}</span><span class="sr">barra</span></th><th class="num">vs total</th></tr></thead><tbody>
-    ${vis.map(x => { const d = tot ? x.r.v - tot.v : 0, b = ind.min < 0 ? `left:${Math.min(X(0), X(x.r.v))}%;width:${Math.abs(X(x.r.v) - X(0))}%` : `left:0;width:${X(x.r.v)}%`;
-      return `<tr class="${x.r.n < NMIN ? 'poca' : ''}${fil ? ' clic' : ''}${sel(x) ? ' sel' : ''}" ${fil ? `tabindex="0" data-v="${x.v}"` : ''}><td class="nom">${esc(x.nombre)}${bajo(x.r)}</td><td class="num">${f0(x.r.n)}</td><td class="num"><b>${fmt(k, x.r)}</b></td><td class="bar"><div class="mini" ${tipAttr(tipInd(k, x.r))}><b style="${b}"></b>${tot ? `<span class="ref" style="left:${X(tot.v)}%"></span>` : ''}</div></td><td class="num"><span class="dif ${x.r.n < NMIN || Math.abs(d) < .05 ? '' : d > 0 ? 'mejora' : 'empeora'}">${fpp(d)}</span></td></tr>`; }).join('') || '<tr><td colspan="5" class="vacio">Sin datos</td></tr>'}
+    ${vis.map((x, fi) => { const d = tot ? x.r.v - tot.v : 0, poca = x.r.n < NMIN, neg = ind.min < 0 && x.r.v < 0;
+      // Color según la diferencia contra el total (rojo = peor, verde = mejor); gris si la muestra es baja
+      const b = (ind.min < 0 ? `left:${Math.min(X(0), X(x.r.v))}%;width:${Math.abs(X(x.r.v) - X(0))}%` : `left:0;width:${X(x.r.v)}%`) + (poca || !tot ? '' : `;background:${GRAF.tonoDif(d, ind.min < 0 ? 40 : 20)}`);
+      return `<tr class="${x.r.n < NMIN ? 'poca' : ''}${fil ? ' clic' : ''}${sel(x) ? ' sel' : ''}" ${fil ? `tabindex="0" data-v="${x.v}"` : ''}><td class="nom">${esc(x.nombre)}${bajo(x.r)}</td><td class="num">${f0(x.r.n)}</td><td class="num"><b>${fmt(k, x.r)}</b></td><td class="bar"><div class="mini" ${tipAttr(tipInd(k, x.r))}><b style="${b}" data-an="barra" data-o="${neg ? 'r' : 'l'}" data-i="${fi}"></b>${tot ? `<span class="ref" style="left:${X(tot.v)}%"></span>` : ''}</div></td><td class="num"><span class="dif ${x.r.n < NMIN || Math.abs(d) < .05 ? '' : d > 0 ? 'mejora' : 'empeora'}">${fpp(d)}</span></td></tr>`; }).join('') || '<tr><td colspan="5" class="vacio">Sin datos</td></tr>'}
     </tbody></table></div>${g.length > tope ? `<button type="button" class="mas">${e.todos ? 'Ver menos' : `Ver los ${g.length}`}</button>` : ''}
     <p class="nota" style="margin:6px 0 0">${fil ? 'Clic en una fila para filtrar todo el tablero. ' : ''}Gris = menos de ${NMIN} encuestas (no se ordena por valor).</p></section>`;
 }
 function montarRanking(raiz) {
   raiz.querySelectorAll('[data-rk]').forEach(p => {
     const e = rkEst[p.dataset.rk];
-    p.querySelectorAll('[data-dim]').forEach(b => { b.onclick = () => { e.dim = b.dataset.dim; e.todos = false; pintarTab(); }; });
-    p.querySelectorAll('[data-ord]').forEach(b => { b.onclick = () => { e.orden = b.dataset.ord; pintarTab(); }; });
-    const mas = p.querySelector('.mas'); if (mas) mas.addEventListener('click', () => { e.todos = !e.todos; pintarTab(); });
+    const solo = `[data-rk="${p.dataset.rk}"]`;   // al reordenar se anima solo este ranking
+    p.querySelectorAll('[data-dim]').forEach(b => { b.onclick = () => { e.dim = b.dataset.dim; e.todos = false; pintarTab(solo); }; });
+    p.querySelectorAll('[data-ord]').forEach(b => { b.onclick = () => { e.orden = b.dataset.ord; pintarTab(solo); }; });
+    const mas = p.querySelector('.mas'); if (mas) mas.addEventListener('click', () => { e.todos = !e.todos; pintarTab(solo); });
     p.querySelectorAll('tr.clic').forEach(tr => { const f = () => alternar(e.dim, +tr.dataset.v); tr.onclick = f; tr.onkeydown = ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); f(); } }; });
   });
 }
@@ -511,7 +554,7 @@ function vRuta() {
       const pr = ant ? IND[k].calc(ant) : null;
       return `<button type="button" class="paso${k === debil ? ' debil' : ''}" data-cajon="${k}" aria-label="${IND[k].nombre}: ${fmt(k, r)}. Ver detalle">
         <span class="nom">${esc(IND[k].nombre)}<small>n ${f0(r.n)}${r.n < NMIN ? ' · muestra baja' : ''}${corrTxt(k, a)}</small></span>
-        <span class="val" ${tipAttr(tipInd(k, r))}>${fmtGrande(k, r)}</span>
+        <span class="val" ${tipAttr(tipInd(k, r))}>${grandeAn(k, r)}</span>
         ${pesa(k, pn.map(x => IND[k].calc(x)), r)}
         <span class="pie-p">${delta(k, r, pr, etA)}${k === debil ? '<span class="tag">la más baja de la etapa</span>' : ''}</span></button>`;
     }).join('');
@@ -570,14 +613,14 @@ function calcDolores(idx) {
   return {tot, alguno: todas.find(x => x.k === alg), dol: todas.filter(x => DL.reglas[x.k] && DL.reglas[x.k][0] === PROC[dolEst.proc])};
 }
 // Pista de −100 a 100 (NPS) o de 0 a 100 (%) con los dos puntos: con el dolor y sin él
-function pista(con, sin, min, ref, suf, tip) {
+function pista(con, sin, min, ref, suf, tip, fi) {
   if (con == null || sin == null) return '<div class="pz vacia">—</div>';
   const X = v => (v - min) / (100 - min) * 100, lo = Math.min(con, sin), hi = Math.max(con, sin);
   const etq = v => `${f0(v)}${suf}`;
   return `<div class="pz" ${tipAttr(tip)}><div class="riel">${min < 0 ? '<span class="cero" style="left:50%"></span>' : ''}
     ${ref != null ? `<span class="ref" style="left:${X(ref)}%"></span>` : ''}
-    <span class="tramo" style="left:${X(lo)}%;width:${X(hi) - X(lo)}%"></span>
-    <span class="pt sin" style="left:${X(sin)}%"></span><span class="pt con" style="left:${X(con)}%"></span>
+    <span class="tramo" style="left:${X(lo)}%;width:${X(hi) - X(lo)}%" data-an="ancho" data-i="${fi}"></span>
+    <span class="pt sin" style="left:${X(sin)}%" data-an="pop" data-i="${fi + 1}"></span><span class="pt con" style="left:${X(con)}%" data-an="pop" data-i="${fi}"></span>
     <span class="lbl izq" style="right:${100 - X(lo)}%">${etq(lo)}</span><span class="lbl der" style="left:${X(hi)}%">${etq(hi)}</span></div></div>`;
 }
 function vDolores() {
@@ -591,14 +634,14 @@ function vDolores() {
   const techo = alguno && alguno.sin != null && alguno.nSin >= NMIN ? alguno.sin : null;
   const cab = tot.m1 == null || !alguno ? '' : `
     <div class="dol-hero">
-      <div class="dh-num"><span>${n1} hoy</span><b>${f1(tot.m1)}${s1}</b></div>
+      <div class="dh-num"><span>${n1} hoy</span><b>${GRAF.cuenta(tot.m1, 1)}${s1}</b></div>
       <div class="dh-pista" ${tipAttr(`<div class="t">Techo teórico</div>Las ${f0(alguno.nSin)} encuestas que no muestran ningún dolor dan ${n1} de ${techo == null ? '—' : f1(techo) + s1}. Si todos calificaran así, el ${n1} subiría ${techo == null ? '—' : f1(techo - tot.m1)} ${u1}.`)}>
         <div class="riel">${min1 < 0 ? '<span class="cero" style="left:50%"></span>' : ''}
-          ${techo == null ? '' : `<span class="flujo" style="left:${X(Math.min(tot.m1, techo))}%;width:${Math.abs(X(techo) - X(tot.m1))}%"></span><span class="pt fin" style="left:${X(techo)}%"></span>`}
+          ${techo == null ? '' : `<span class="flujo" style="left:${X(Math.min(tot.m1, techo))}%;width:${Math.abs(X(techo) - X(tot.m1))}%" data-an="ancho"></span><span class="pt fin" style="left:${X(techo)}%" data-an="desliza" data-desde="${X(tot.m1)}%"></span>`}
           <span class="pt hoy" style="left:${X(tot.m1)}%"></span></div>
         <div class="escala"><span>${min1 < 0 ? '−100' : '0'}</span><span>${min1 < 0 ? '0' : '50'}</span><span>100</span></div></div>
-      <div class="dh-num der"><span>Sin ningún dolor</span><b>${techo == null ? '—' : f1(techo) + s1}</b></div>
-      <div class="dh-pts"><b>${techo == null ? '—' : fpp(techo - tot.m1)}</b><span>${u1} de ${n1} en juego</span></div>
+      <div class="dh-num der"><span>Sin ningún dolor</span><b>${techo == null ? '—' : GRAF.cuenta(techo, 1) + s1}</b></div>
+      <div class="dh-pts"><b>${techo == null ? '—' : GRAF.cuenta(techo - tot.m1, 1, {signo: true})}</b><span>${u1} de ${n1} en juego</span></div>
       <p class="dh-pie">${f1(alguno.pct)} % de las encuestas (${f0(alguno.n)} de ${f0(tot.n)}) muestra al menos un dolor. Su ${n1} es ${f1(alguno.con)}${s1}${alguno.c2 != null ? ` y su ${n2} ${f1(alguno.c2)} %` : ''}.</p>
     </div>`;
   const filasH = orden.map((x, i) => {
@@ -610,9 +653,9 @@ function vDolores() {
       <span class="rk">${String(i + 1).padStart(2, '0')}</span>
       <div class="qu"><span class="mom" ${tipAttr('Regla: ' + DL.reglas[x.k][2])}>${esc(DL.reglas[x.k][1])}</span><b>${esc(tc[0])}</b><q>${esc(tc[1])}</q></div>
       <div class="vive"><b>${f1(x.pct)} %</b><span>${f0(x.n)} encuestas</span>${poca ? '<span class="bajo">muestra baja</span>' : ''}</div>
-      ${pista(x.con, x.sin, min1, tot.m1, s1, tipN)}
-      ${pista(x.c2, x.s2, 0, tot.m2, ' %', tipC)}
-      <div class="gana" ${tipAttr(tipP)}><b>${x.pts == null ? '—' : fpp(x.pts)}</b><small>${u1}</small><span class="barrita"><i style="width:${poca || x.pts == null ? 0 : Math.max(0, x.pts) / maxPts * 100}%"></i></span></div>
+      ${pista(x.con, x.sin, min1, tot.m1, s1, tipN, i)}
+      ${pista(x.c2, x.s2, 0, tot.m2, ' %', tipC, i + 1)}
+      <div class="gana" ${tipAttr(tipP)}><b>${x.pts == null ? '—' : GRAF.cuenta(x.pts, 1, {signo: true})}</b><small>${u1}</small><span class="barrita"><i style="width:${poca || x.pts == null ? 0 : Math.max(0, x.pts) / maxPts * 100}%" data-an="ancho" data-i="${i + 2}"></i></span></div>
     </li>`;
   }).join('');
   const segProc = st.proceso == null ? `<div class="seg" role="group" aria-label="Proceso de los dolores" id="dol-p">${[FP, COB].map(p => `<button type="button" data-p="${p}" aria-pressed="${dolEst.proc === p}">${PROC[p]}</button>`).join('')}</div>` : '';
@@ -635,9 +678,12 @@ function kpiCards(ks) {
   const a = sumar(filas()), ant = mesesAnteriores(), aAnt = ant ? sumar(filas({periodo: ant})) : null, etA = ant ? etqCorta(ant) : '';
   return `<section class="kpis${ks.length % 2 ? ' impar' : ''}" style="--nk:${ks.length - 1}" aria-label="Indicadores de ${etqMeses(st.meses)}">${ks.map((k, i) => {
     const r = IND[k].calc(a), pr = aAnt ? IND[k].calc(aAnt) : null;
-    return `<article class="kpi${i === 0 ? ' estrella' : ''}">${i === 0 ? '<span class="glow"></span>' : ''}
+    const ind = IND[k], esc0 = ind.min < 0 ? `de ${f0(ind.min)} a ${f0(ind.max)}` : `de ${f0(ind.min)} a ${f0(ind.max)} %`;
+    // Anillo: dónde cae el valor en su escala completa, coloreado de rojo (lo peor) a verde (lo mejor)
+    const an = r ? GRAF.anillo(r.v, ind.min, ind.max, {tip: tipInd(k, r, `<br>El anillo ubica el valor en la escala ${esc0}: rojo es lo peor, verde lo mejor.`)}) : '';
+    return `<article class="kpi${i === 0 ? ' estrella' : ''}">${i === 0 ? '<span class="glow"></span>' : ''}${an}
       <div class="et">${IND[k].corto} <span class="info" tabindex="0" ${tipAttr(esc(IND[k].nombre + '. ' + IND[k].def))}>?</span></div>
-      <div class="v" ${tipAttr(tipInd(k, r))}>${fmtGrande(k, r)}</div>
+      <div class="v" ${tipAttr(tipInd(k, r))}>${grandeAn(k, r)}</div>
       <div class="pie">${r ? delta(k, r, pr, etA) : `<span class="nota">${IND[k].proc != null ? 'Solo se mide en ' + PROC[IND[k].proc].toLowerCase() : 'Sin respuestas'}</span>`}</div>
       ${spark(k)}
       <div class="pie"><span>n ${r ? f0(r.n) : 0}${r ? ` · ±${f1(r.ic)}` : ''}</span>${bajo(r)}<button type="button" class="ver" data-cajon="${k}" aria-label="Ver detalle y comentarios de ${IND[k].nombre}">Voces ›</button></div></article>`;
@@ -651,21 +697,19 @@ function vResumen(p) {
   let der;
   if (st.proceso === COB) {
     const idx = filas(), a = sumar(idx), g = porDim(idx, 'canal').filter(x => V.canal[x.v] !== 'No aplica').map(x => ({nombre: x.nombre, c: x.a.n})).sort((x, y) => y.c - x.c);
-    der = `<section class="panel"><header><h2>Por dónde se enteró del cobro</h2><p class="sub">Canal de comunicación · % de ${f0(a.n)} encuestas de cobranza.</p></header>${barras(g, a.n, () => 'var(--d1)')}</section>`;
+    der = `<section class="panel radial-angosto"><header><h2>Por dónde se enteró del cobro</h2><p class="sub">Canal de comunicación · % de ${f0(a.n)} encuestas de cobranza.</p></header>${canalesRadial(g, a.n)}</section>`;
   } else {
+    // Brecha: NPS de quienes dicen que los valores cuadran (verde) frente al de quienes dicen que no (rojo)
     const gs = grNeg({proceso: FP}).map(g => { const a = g.a, si = npsDe(a.va_si, a.prom_vasi, a.det_vasi), no = npsDe(a.va_no, a.prom_vano, a.det_vano);
-      return `<div class="bf"><div class="et"><b>${esc(g.nombre)}</b><br><span class="nota">${fmt('va', IND.va.calc(a))} cuadran</span></div>
-        <div class="c"><span>Cuadran</span><b>${si == null ? '—' : f1(si)}</b><span>n ${f0(a.va_si)}</span></div>
-        <div class="c"><span>No cuadran</span><b>${no == null ? '—' : f1(no)}</b><span>n ${f0(a.va_no)}</span></div>
-        <div class="c gap"><span>Brecha</span><b>${si != null && no != null ? f1(si - no) : '—'}</b><span>pts de NPS</span></div></div>`; }).join('');
-    der = `<section class="panel"><header><h2>Cuando la factura no cuadra con el plan</h2><p class="sub">NPS de quienes dicen que los valores de la factura van de acuerdo con su plan, frente al de quienes dicen que no.</p></header><div class="brechas">${gs}</div></section>`;
+      return {nombre: g.nombre, sub: `${fmt('va', IND.va.calc(a))} cuadran`, bueno: si == null ? null : {v: si, n: a.va_si}, malo: no == null ? null : {v: no, n: a.va_no}}; });
+    der = `<section class="panel"><header><h2>Cuando la factura no cuadra con el plan</h2><p class="sub">NPS de quienes dicen que los valores de la factura van de acuerdo con su plan, frente al de quienes dicen que no.</p></header>${GRAF.brecha(gs, {etqBueno: 'Cuadran con el plan', etqMalo: 'No cuadran', unidad: 'pts de NPS'})}</section>`;
   }
   const lentes = st.proceso === COB ? ['imal', 'tmal', 'cnoc', 'ibien'] : st.proceso === FP ? ['det', 'pro', 'vano', 'fdif', 'pdif'] : ['det', 'pro', 'vano', 'imal', 'tmal'];
   p.innerHTML = `
     ${kpiCards(ks)}
     ${vRuta()}
     <div class="g g-2-1" style="min-height:0">
-      <section class="panel"><header><h2>${IND[st.evo].corto} · ${st.modo === 'mes' ? 'mes a mes' : 'semana a semana, ' + etqMeses(st.meses)}</h2>
+      <section class="panel" id="evo-p"><header><h2>${IND[st.evo].corto} · ${st.modo === 'mes' ? 'mes a mes' : 'semana a semana, ' + etqMeses(st.meses)}</h2>
         <div class="herr"><label class="sr" for="evo-k">Indicador</label><select class="sel" id="evo-k">${ETAPAS.map(E => { const ks = E.ks.filter(k => evoKs.includes(k)); return ks.length ? `<optgroup label="${E.t}">${ks.map(k => `<option value="${k}"${st.evo === k ? ' selected' : ''}>${IND[k].nombre}</option>`).join('')}</optgroup>` : ''; }).join('')}${evoKs.includes('nps') ? `<option value="nps"${st.evo === 'nps' ? ' selected' : ''}>NPS · recomendación</option>` : ''}</select>
         ${PERIODOS.length > 1 ? `<div class="seg" role="group" aria-label="Agrupar" id="evo-m"><button type="button" data-m="mes" aria-pressed="${st.modo === 'mes'}">Mes</button><button type="button" data-m="semana" aria-pressed="${st.modo === 'semana'}">Semana</button></div>` : ''}</div>
         <div class="leyenda" style="flex-basis:100%">${negs().map(e => `<span><i class="l" style="background:${CE[NEG[e]]}"></i>${NEG[e]}</span>`).join('')}<span class="nota">Punto hueco = menos de ${NMIN} encuestas</span>${tablaPH('evo')}</div></header>
@@ -674,10 +718,10 @@ function vResumen(p) {
     </div>
     ${vDolores()}
     ${carrusel('res', lentes)}`;
-  p.querySelectorAll('#dol-r button').forEach(b => { b.onclick = () => { dolEst.rango = b.dataset.r; pintarTab(); }; });
-  p.querySelectorAll('#dol-p button').forEach(b => { b.onclick = () => { dolEst.proc = +b.dataset.p; pintarTab(); }; });
-  p.querySelector('#evo-k').onchange = e => { st.evo = e.target.value; pintarTab(); };
-  p.querySelectorAll('#evo-m button').forEach(b => { b.onclick = () => { st.modo = b.dataset.m; pintarTab(); }; });
+  p.querySelectorAll('#dol-r button').forEach(b => { b.onclick = () => { dolEst.rango = b.dataset.r; pintarTab('#dolores'); }; });
+  p.querySelectorAll('#dol-p button').forEach(b => { b.onclick = () => { dolEst.proc = +b.dataset.p; pintarTab('#dolores'); }; });
+  p.querySelector('#evo-k').onchange = e => { st.evo = e.target.value; pintarTab('#evo-p'); };
+  p.querySelectorAll('#evo-m button').forEach(b => { b.onclick = () => { st.modo = b.dataset.m; pintarTab('#evo-p'); }; });
 }
 // En las pestañas de proceso se ignora el filtro de proceso: cada una muestra el suyo
 const avisoProceso = proc => st.proceso != null && st.proceso !== proc ? `<p class="nota" style="margin:0">El filtro de proceso dice «${PROC[st.proceso]}»; esta pestaña muestra ${PROC[proc].toLowerCase()} igual.</p>` : '';
@@ -686,8 +730,8 @@ function vFactura(p) {
   p.innerHTML = avisoProceso(FP) + conProceso(FP, () => {
     const idx = filas(), a = sumar(idx), gr = grNeg();
     return `${kpiCards(['fsat', 'ces1', 'va'])}
-    <div class="g g2"><section class="panel"><header><h2>¿Qué tan fácil es entender la factura?</h2><p class="sub">CES 1 · centrado en el 3: a la izquierda lo difícil, a la derecha lo fácil.</p></header>${divergente(gr, 'ces1')}</section>
-      <section class="panel"><header><h2>¿Los valores cuadran con el plan?</h2><p class="sub">Y la satisfacción con el valor facturado, de 1 a 5.</p></header>${apilada(gr, PARTES.va, 'va')}<div style="height:10px"></div>${divergente(gr, 'fsat')}</section></div>
+    <div class="g g2"><section class="panel"><header><h2>¿Qué tan fácil es entender la factura?</h2><p class="sub">CES 1 · centrado en el 3: a la izquierda lo difícil, a la derecha lo fácil.</p></header>${divergente(gr, 'ces1')}<h3 class="sub-t">Satisfacción con el valor facturado</h3>${divergente(gr, 'fsat')}</section>
+      <section class="panel dona-panel"><header><h2>¿Los valores cuadran con el plan?</h2><p class="sub">% de quienes dicen que los valores de la factura van de acuerdo con su plan. En el centro, el indicador.</p></header>${donasVa(gr)}</section></div>
     <div class="g g2">${panelMotivos('va', 'Por qué no cuadran los valores', 'Motivos de quienes dicen que no', idx)}${panelMotivos('ces1', 'Qué cuesta entender de la factura', 'Motivos de quienes califican 1 a 3', idx)}</div>
     ${carrusel('fac', ['vano', 'fdif', 'fmal', 'fbien'])}
     <div class="g g2">${ranking('va', 'va')}${ranking('ces1', 'ces1')}</div>`;
@@ -697,9 +741,9 @@ function vPago(p) {
   p.innerHTML = avisoProceso(FP) + conProceso(FP, () => {
     const idx = filas(), a = sumar(idx), gr = grNeg();
     return `${kpiCards(['psat', 'ces2', 'rap', 'seg'])}
-    <div class="g g2"><section class="panel"><header><h2>¿Qué tan fácil es pagar?</h2><p class="sub">CES 2 · centrado en el 3: a la izquierda lo difícil, a la derecha lo fácil.</p></header>${divergente(gr, 'ces2')}<div style="height:10px"></div><h2 style="margin:6px 0 4px;font:800 14px var(--f-ui)">Satisfacción con el pago</h2>${divergente(gr, 'psat')}</section>
-      <section class="panel"><header><h2>Rapidez y seguridad al pagar</h2><p class="sub">Escala de 1 a 3. El 1 es la respuesta mala; el indicador es el % que da 2 o 3.</p></header>${apilada(gr, PARTES.rap, 'rap')}<div style="height:10px"></div>${apilada(gr, PARTES.seg, 'seg')}</section></div>
-    <div class="g g2">${panelMotivos('ces2', 'Qué hace difícil pagar', 'Motivos de quienes califican 1 a 3', idx)}<div class="g">${panelMotivos('rap', 'Por qué el pago es lento', 'Motivos de quienes califican 1', idx)}${panelMotivos('seg', 'Por qué el pago no da confianza', 'Motivos de quienes califican 1', idx)}</div></div>
+    <div class="g g2"><section class="panel"><header><h2>¿Qué tan fácil es pagar?</h2><p class="sub">CES 2 · centrado en el 3: a la izquierda lo difícil, a la derecha lo fácil.</p></header>${divergente(gr, 'ces2')}<h3 class="sub-t">Satisfacción con el pago</h3>${divergente(gr, 'psat')}</section>
+      <section class="panel"><header><h2>Rapidez y seguridad al pagar</h2><p class="sub">Escala de 1 a 3. El 1 es la respuesta mala; el indicador es el % que da 2 o 3.</p></header><div class="par-torres"><div><h3>Rapidez</h3>${torres3(gr, 'rap')}</div><div><h3>Seguridad</h3>${torres3(gr, 'seg')}</div></div></section></div>
+    <div class="g g3">${panelMotivos('ces2', 'Qué hace difícil pagar', 'Motivos de quienes califican 1 a 3', idx)}${panelMotivos('rap', 'Por qué el pago es lento', 'Motivos de quienes califican 1', idx)}${panelMotivos('seg', 'Por qué el pago no da confianza', 'Motivos de quienes califican 1', idx)}</div>
     ${carrusel('pag', ['pdif', 'pmal', 'rap1', 'seg1', 'pbien'])}
     <div class="g g2">${ranking('ces2', 'ces2')}${ranking('psat', 'psat')}</div>`;
   });
@@ -709,8 +753,8 @@ function vCobranza(p) {
     const idx = filas(), a = sumar(idx), gr = grNeg();
     const canales = porDim(idx, 'canal').filter(x => V.canal[x.v] !== 'No aplica').map(x => ({nombre: x.nombre, c: x.a.n})).sort((x, y) => y.c - x.c);
     return `${kpiCards(['cinf', 'ctra', 'clar'])}
-    <div class="g g2"><section class="panel"><header><h2>Información y trato en la gestión de cobro</h2><p class="sub">De 1 a 5 · centrado en el 3.</p></header>${divergente(gr, 'cinf')}<div style="height:10px"></div><h2 style="margin:6px 0 4px;font:800 14px var(--f-ui)">Satisfacción con el trato</h2>${divergente(gr, 'ctra')}</section>
-      <section class="panel"><header><h2>¿Fue clara la información?</h2><p class="sub">Claridad de 1 a 5.</p></header>${divergente(gr, 'clar')}<div style="height:14px"></div><h2 style="margin:0 0 8px;font:800 14px var(--f-ui)">Por dónde se enteró del cobro</h2>${barras(canales, a.n, () => 'var(--d1)')}</section></div>
+    <div class="g g2"><section class="panel"><header><h2>Información y trato en la gestión de cobro</h2><p class="sub">De 1 a 5 · centrado en el 3.</p></header>${divergente(gr, 'cinf')}<h3 class="sub-t">Satisfacción con el trato</h3>${divergente(gr, 'ctra')}</section>
+      <section class="panel"><header><h2>¿Fue clara la información?</h2><p class="sub">Claridad de 1 a 5.</p></header>${divergente(gr, 'clar')}<h3 class="sub-t">Por dónde se enteró del cobro</h3><p class="nota" style="margin:-2px 0 8px">Canal de comunicación · % de ${f0(a.n)} encuestas de cobranza.</p>${canalesRadial(canales, a.n)}</section></div>
     ${carrusel('cob', ['imal', 'tmal', 'cnoc', 'ibien', 'tbien'])}
     <div class="g g2">${ranking('cinf', 'cinf', DIM_COB)}${ranking('ctra', 'ctra', DIM_COB)}</div>`;
   });
@@ -744,19 +788,23 @@ function vCalidad(p) {
   p.querySelectorAll('.meses button').forEach(b => { b.onclick = () => { fijarMeses([+b.dataset.i]); refrescar(); }; });
 }
 const VISTAS = {resumen: vResumen, factura: vFactura, pago: vPago, cobranza: vCobranza, voz: vVoz, calidad: vCalidad};
-function pintarTab() {
+// solo: sin valor = anima toda la pestaña; un selector = anima solo ese panel; '' = no anima nada
+function pintarTab(solo) {
   const p = document.getElementById('p-' + st.tab);
   VISTAS[st.tab](p);
   const proc = {factura: FP, pago: FP, cobranza: COB}[st.tab];
   if (proc != null) conProceso(proc, () => { montarRanking(p); montarCarrusel(p); dibujarLineas(p); });
   else { montarRanking(p); montarCarrusel(p); dibujarLineas(p); }
   p.querySelectorAll('[data-cajon]').forEach(b => { b.onclick = () => abrirCajon(b.dataset.cajon); });
+  if (solo === undefined) { GRAF.animar(p); svgFx(p); }
+  else if (solo) { const el = p.querySelector(solo); if (el) { GRAF.animar(el); svgFx(el); } }
   if (!C && st.tab !== 'calidad') cargarComentarios();
 }
 
 // ------------------------------------------------------------------ spotlight por indicador
 const cajon = document.getElementById('cajon'), velo = document.getElementById('velo'); let volverA = null;
-function abrirCajon(k, foco) {
+// quieto = repintar sin animar (p. ej. cuando llegan los comentarios con el cajón abierto)
+function abrirCajon(k, foco, quieto) {
   if (foco !== false) volverA = document.activeElement;
   const ind = IND[k];
   conProceso(ind.proc, () => {
@@ -764,14 +812,14 @@ function abrirCajon(k, foco) {
     const col = l => { const ej = ejemplos(l, 4); return `<div class="col"><h4><i class="punto" style="background:${LENTES[l].malo ? 'var(--d-2)' : 'var(--d2)'}"></i>${LENTES[l].t}${ej ? ` <span class="nota">${f0(ej.total)}</span>` : ''}</h4>${ej == null ? '<div class="esqueleto"></div>' : ej.items.map(v => tarjeta(v)).join('') || '<p class="nota">Sin comentarios</p>'}</div>`; };
     cajon.dataset.k = k;
     cajon.innerHTML = `<header><span class="nota">${etqMeses(st.meses)} · ${PROC[ind.proc]} · ${st.negocio == null ? 'Hogar + Móvil' : NEG[st.negocio]}</span><h2 id="cajon-t" style="margin:0;font:900 22px var(--f-num)">${ind.nombre}</h2>
-        <div class="big">${fmtGrande(k, r)}</div><p class="def">${esc(ind.def)}</p><span class="nota">n ${r ? f0(r.n) : 0}${r ? ` · IC 95 % ±${f1(r.ic)}` : ''}</span>
+        <div class="big">${grandeAn(k, r)}</div><p class="def">${esc(ind.def)}</p><span class="nota">n ${r ? f0(r.n) : 0}${r ? ` · IC 95 % ±${f1(r.ic)}` : ''}</span>
         <button type="button" class="icono x" aria-label="Cerrar">${svgI('x')}</button></header>
       <div class="cuerpo"><div><h3>Mes a mes</h3><div class="chart" style="min-height:170px" data-lineas="${k}" data-modo="mes" id="cj-l"></div>${tablaPH('cj-l')}</div>
         <div><h3>Distribución</h3>${distribucion(k, grNeg())}</div>
         <div><h3>Lo que dicen</h3><div class="dos">${col(par[0])}${col(par[1])}</div>
         <button type="button" class="mas" id="cj-mas">Ver todos en Voces ›</button></div></div>`;
     cajon.hidden = velo.hidden = false;
-    requestAnimationFrame(() => { cajon.classList.add('ver'); velo.classList.add('ver'); conProceso(ind.proc, () => dibujarLineas(cajon)); });
+    requestAnimationFrame(() => { cajon.classList.add('ver'); velo.classList.add('ver'); conProceso(ind.proc, () => dibujarLineas(cajon)); if (!quieto) { GRAF.animar(cajon, {inmediato: true, base: .15}); svgFx(cajon, {inmediato: true, base: .15}); } });
     cajon.querySelector('.x').onclick = cerrarCajon;
     cajon.querySelector('#cj-mas').onclick = () => { exEst.lente = par[0]; cerrarCajon(); irA('voz'); };
     montarCarrusel(cajon);
@@ -865,7 +913,7 @@ function pintarTema() {
 btnTema.onclick = () => {
   const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
   document.documentElement.dataset.theme = t; try { localStorage.setItem('fpc-tema', t); } catch (e) { /* sin almacenamiento */ }
-  pintarTema(); pintarTab();
+  pintarTema(); pintarTab('');   // cambiar de tema no repite las animaciones
 };
 
 // ------------------------------------------------------------------ ciclo
@@ -881,6 +929,10 @@ leerHash();
 document.getElementById('actualizado').textContent = D.generado.slice(0, 10).split('-').reverse().join('/');
 document.getElementById('sello').textContent = `${mesC(PERIODOS[0])} a ${mesC(ultimo(PERIODOS))} · ${f0(PERIODOS.reduce((s, p) => s + D.periodos[p].n, 0))} encuestas`;
 pintarTema(); refrescar();
-let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { pintarTab(); if (cajon.dataset.k) conProceso(IND[cajon.dataset.k].proc, () => dibujarLineas(cajon)); }, 150); });
+// Al cambiar el tamaño se repinta en el estado final, sin repetir las animaciones
+let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => {
+  const h = document.documentElement; h.setAttribute('data-sin-anim', '');
+  try { pintarTab(); if (cajon.dataset.k) conProceso(IND[cajon.dataset.k].proc, () => dibujarLineas(cajon)); } finally { h.removeAttribute('data-sin-anim'); }
+}, 150); });
 addEventListener('hashchange', () => { leerHash(); refrescar(); });
 })();
