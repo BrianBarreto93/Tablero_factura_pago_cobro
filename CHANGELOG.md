@@ -1,5 +1,25 @@
 # Cambios
 
+## 2026-11-18 · v5
+
+- Dolores del cliente: clic en un dolor para **resaltarlo** (los demás se apagan y en el recuadro de arriba aparece hasta
+  dónde llegaría el NPS sin ese dolor). El **globo** junto a cada dolor abre «Lo que más repiten»: las palabras más
+  frecuentes y los comentarios agrupados (los casi iguales juntos, con ×n), con los filtros y el periodo de la caja.
+- Encabezado de la lista: el indicador en grande y debajo la clave (con el dolor, sin el dolor, total), todo centrado;
+  «NPS que recupera» (en cobranza, «CSAT información que recupera») también centrado.
+- `comentarios.js` trae la columna `dl` (máscara de dolores de cada comentario, `etl/dolores.py::marcar_comentario`) y
+  `dl_claves`. Se rehízo con `--solo-ensamblar` (sin Oracle): las cifras no cambian.
+  En factura y pago, los dolores de respuesta cerrada toman el «otro motivo» de su pregunta y el porqué/sugerencia de
+  quien no es promotor (en cobranza, de quien calificó la información de 1 a 3); pesan doble los de la pregunta propia.
+- Incluye lo que estaba sin commit de v4 y v4.1 (tabla Indicadores mes a mes, Alarmas junto a la serie, Tabla copiable)
+  y `nube.js`/`nube.css`.
+- Gráficos de líneas nuevos (`GRAF.lineas` en `graficos.js`, la misma copia en Factura, Soporte-FM y Digital): curva suave
+  que no inventa picos entre meses, área en degradado y resplandor del color de la serie. Al entrar en pantalla la línea se
+  traza con un cometa, cada punto aparece cuando la línea llega a él y la cifra final, en píldora, cuenta hasta su valor; el
+  último punto late unos segundos. Mes elegido en píldora oscura. Redibujar con los mismos datos (tamaño, tema) no repite la
+  animación; al imprimir o con «reducir movimiento» se ve quieto.
+- Sparks de los KPI con curva suave, más color en el área y un punto final que late.
+
 ## 2026-11-13 · v3
 
 - Gráficos animados con Motion (`tablero/vendor/motion.js`, copia local: funciona sin internet). La librería

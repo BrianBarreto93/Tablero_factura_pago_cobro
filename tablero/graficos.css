@@ -1,4 +1,4 @@
-/* graficos.css · estilos de graficos.js. El MISMO archivo va en los dos tableros.
+/* graficos.css · estilos de graficos.js. El MISMO bloque va en los tres tableros (Factura, Soporte-FM y Digital).
    Rampa evaluativa de 9 tonos: --t0 rojo intenso (lo peor) → --t4 arena dorada (neutro) → --t8 verde sobrio (lo mejor). */
 :root[data-theme="light"]{
   --t0:#B50E1B; --t1:#CB2638; --t2:#D84B5B; --t3:#DF8381; --t4:#E2B865; --t5:#B7BE80; --t6:#82A987; --t7:#4C8968; --t8:#2A684B;
@@ -95,25 +95,23 @@
 .g-radial-l b{font:800 12px var(--f-ui);font-variant-numeric:tabular-nums;text-align:right}
 .g-radial-l small{grid-column:3;text-align:right;color:var(--ink-3);font-size:10.5px;margin-top:-5px}
 
-/* Brecha (columnas con dos puntos) */
-.g-brecha{display:grid;gap:8px}
-.g-br-ley{display:flex;gap:14px;font-size:11.5px;color:var(--ink-2)}
-.g-br-ley i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
-.g-br-area{position:relative;display:flex;gap:10px;padding:8px 0 0 44px;margin-top:6px}
-.g-br-guias{position:absolute;left:44px;right:0;top:8px;height:220px;pointer-events:none}
-.g-guia{position:absolute;left:0;right:0;height:0;border-top:1px dashed var(--line-2)}
-.g-guia.cero{border-top:1.5px solid var(--eje)}
-.g-guia em{position:absolute;left:-44px;top:-7px;width:26px;text-align:right;font:600 10px var(--f-ui);font-style:normal;color:var(--ink-3)}
-.g-br-col{flex:1;display:grid;grid-template-rows:220px auto;gap:8px;min-width:0}
-.g-br-pista{position:relative;height:220px}
-.g-br-tallo{position:absolute;left:50%;width:10px;margin-left:-5px;border-radius:6px;background:linear-gradient(0deg,var(--t0),var(--t4),var(--t8));opacity:.85}
-.g-br-pt{position:absolute;left:50%;width:18px;height:18px;margin:0 0 -9px -9px;border-radius:50%;border:3px solid var(--panel);box-shadow:0 2px 10px rgba(0,0,0,.18);cursor:default}
-.g-br-pt.bueno{background:var(--t8)}.g-br-pt.malo{background:var(--t0)}
-.g-br-pt em{position:absolute;left:20px;top:-2px;font:900 13px var(--f-num);font-style:normal;white-space:nowrap;color:var(--ink)}
-.g-br-chip{position:absolute;right:50%;margin:0 14px -11px 0;padding:3px 8px;border-radius:999px;background:var(--ink);color:var(--panel);font:900 12px var(--f-num);white-space:nowrap}
-.g-br-pie{text-align:center;display:grid;gap:1px}
-.g-br-pie b{font:800 13px var(--f-ui)}
-.g-br-pie small{color:var(--ink-3);font-size:10.5px}
+/* Brecha (NPS de la buena condición frente a la mala, barras desde 0) */
+.g-brecha{display:grid;gap:14px}
+.g-br-gs{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:18px 28px}
+.g-br-g{display:grid;gap:6px;align-content:start}
+.g-br-tit{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.g-br-tit b{font:800 13.5px var(--f-ui)}.g-br-tit small{color:var(--ink-3);font-size:11px}
+.g-br-fila{display:grid;grid-template-columns:minmax(92px,.9fr) minmax(90px,1.6fr) 62px;gap:12px;align-items:center;font-size:12px}
+.g-br-fila .et{font-weight:700;line-height:1.25;display:flex;gap:6px;align-items:center}
+.g-br-fila .et i{flex:none;width:10px;height:10px;border-radius:50%}
+.g-br-fila .bueno{background:var(--t8)}.g-br-fila .malo{background:var(--t0)}
+.g-br-pista{position:relative;height:18px;background:var(--panel-3);border-radius:4px}
+.g-br-pista::before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1.5px;margin-left:-.75px;background:var(--eje);z-index:1}
+.g-br-pista b{position:absolute;top:0;bottom:0;min-width:2px}
+.g-br-pista b[style*="left"]{border-radius:0 4px 4px 0}.g-br-pista b[style*="right"]{border-radius:4px 0 0 4px}
+.g-br-fila .num{text-align:right;font:900 13px var(--f-num);font-variant-numeric:tabular-nums}
+.g-br-fila .num small{display:block;font:600 10.5px var(--f-ui);color:var(--ink-3)}
+.g-br-frase{margin:2px 0 0;font-size:12px;color:var(--ink-2)}.g-br-frase b{color:var(--ink)}
 .g-br-nota{margin:0}
 
 /* Relojes */
@@ -134,11 +132,43 @@
 .g-pt.on{r:6.5}
 .g-rampa-y{opacity:.9}
 
+/* Spark de los KPI: punto final que late */
+.g-spark-w{position:relative;margin-top:8px}
+.kpi .g-spark-w .spark{display:block;margin-top:0}
+.g-spark-pt{position:absolute;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:var(--c);box-shadow:0 0 0 2px var(--panel);pointer-events:none}
+.g-spark-pt::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1.5px solid var(--c);opacity:0;animation:g-late 2.8s ease-out 1.6s 3}
+@keyframes g-late{0%{opacity:.7;transform:scale(.4)}100%{opacity:0;transform:scale(1.9)}}
+
+/* Líneas con movimiento (GRAF.lineas) */
+.ln{overflow:visible}
+.ln-grid{stroke:var(--line);stroke-width:1;stroke-dasharray:2 5;stroke-linecap:round}
+.ln-cero{stroke:var(--eje);stroke-width:1.2}
+.ln-ey{font:700 10.5px var(--f-num);fill:var(--ink-3);font-variant-numeric:tabular-nums}
+.ln-ex{font:700 11px var(--f-ui);fill:var(--ink-3)}
+.ln-ex.sel{fill:var(--panel);font-weight:800}
+.ln-pil{fill:var(--ink)}
+.ln-col{fill:color-mix(in srgb,var(--ink) 4.5%,transparent)}
+.ln-area{pointer-events:none}
+.ln-brillo{fill:none;opacity:.32;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.ln-linea{fill:none;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.ln-pt{stroke-width:2.4;transition:r .15s}
+.ln-pt.on{r:7}
+.ln-cometa{opacity:0;pointer-events:none;filter:drop-shadow(0 0 6px currentColor)}
+.ln-halo{fill:none;stroke-width:2;opacity:0;pointer-events:none;transform-box:fill-box;transform-origin:center}
+.ln-late .ln-halo{animation:ln-pulso 2.6s ease-out 3}
+@keyframes ln-pulso{0%{opacity:.75;transform:scale(.8)}100%{opacity:0;transform:scale(2.8)}}
+.ln-et{pointer-events:none}
+.ln-et rect{transform-box:fill-box;transform-origin:left center;filter:drop-shadow(0 3px 6px rgba(0,0,0,.18))}
+.ln-et text{font:800 12px var(--f-num);font-variant-numeric:tabular-nums}
+.ln-espera .ln-fondo,.ln-espera .ln-area,.ln-espera .ln-pt,.ln-espera .ln-et{opacity:0}
+.ln-espera .ln-linea,.ln-espera .ln-brillo{stroke-dasharray:1 1;stroke-dashoffset:1}
+@media print{.g-spark-pt::after,.ln-halo,.ln-cometa{display:none}}
+
 @media (max-width:760px){
   .g-radial{grid-template-columns:1fr}
   .g-radial svg{max-width:220px;justify-self:center}
-  .g-br-col{grid-template-rows:180px auto}.g-br-pista,.g-br-guias{height:180px}
 }
 @media (prefers-reduced-motion:reduce){
   .g-pt,.g-dona-svg circle,.g-radial circle,.g-pal-p b i{transition:none}
+  .g-spark-pt::after,.ln-late .ln-halo{animation:none}
 }

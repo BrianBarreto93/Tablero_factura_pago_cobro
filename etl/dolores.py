@@ -90,3 +90,44 @@ def marcar(crudo, d):
     m["alguno_fp"] = m[POR_PROCESO["Factura y pago"]].any(axis=1)
     m["alguno_cob"] = m[POR_PROCESO["Cobranza"]].any(axis=1)
     return m
+
+
+# --------------------------------------------------------------------------- comentarios de cada dolor
+# Para el ícono de comentarios de cada dolor en el tablero: cada comentario lleva una máscara de bits (bit i = CLAVES[i])
+# con los dolores de los que habla. Dolores de texto: las mismas expresiones, sobre ese comentario solo. Dolores de la
+# respuesta cerrada: el «otro motivo» de su propia pregunta y, de quien vive el dolor sin ser promotor (en cobranza, con
+# la información calificada de 1 a 3), su porqué y su sugerencia.
+PROPIA = {"va_no": "VALORES_ACORDES_CLASIFICACION1", "entender": "CES1_CLASIFICACION1", "pagar": "CES2_CLASIFICACION1",
+          "lento": "RAPIDEZ_CLASIFICACION1", "confianza": "SEGURIDAD_CLASIFICACION1", "claridad": "CLARIDAD_PROFUNDIZACION1"}
+_CERRADA = {
+    "va_no": lambda v: v.get("va") == 0,
+    "entender": lambda v: v.get("ces1") in (1, 2, 3),
+    "pagar": lambda v: v.get("ces2") in (1, 2, 3),
+    "lento": lambda v: v.get("rap") == 1,
+    "confianza": lambda v: v.get("seg") == 1,
+    "claridad": lambda v: v.get("clar") in (1, 2, 3),
+}
+_OTRAS = {"Factura y pago": ("NPS_PROFUNDIZACION1", "SUGERENCIA"),
+          "Cobranza": ("CSAT_PROFUNDIZACION1", "CSAT1_PROFUNDIZACION1", "SUGERENCIA")}
+
+
+def _no_satisfecho(v):
+    if v["proceso"] == "Factura y pago":
+        return v.get("nps") is not None and v["nps"] <= 8
+    return v.get("cinf") is not None and v["cinf"] <= 3
+
+
+def marcar_comentario(v):
+    """v = comentario de data/periodos (dims + notas + pregunta + texto) → máscara de bits de sus dolores."""
+    proc = v.get("proceso")
+    if proc not in POR_PROCESO:
+        return 0
+    t, m = _NEGADO.sub(" ", v.get("texto") or ""), 0
+    for k in POR_PROCESO[proc]:
+        if k in RX:
+            ok = bool(RX[k].search(t))
+        else:
+            ok = _CERRADA[k](v) and (v["pregunta"] == PROPIA[k] or (v["pregunta"] in _OTRAS[proc] and _no_satisfecho(v)))
+        if ok:
+            m |= 1 << CLAVES.index(k)
+    return m

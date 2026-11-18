@@ -157,7 +157,7 @@ def ensamblar():
                 dl.append([r, dl_idx[k]] + c)
         for v in s["verbatims"]:
             vb.append([idx[k][v[k]] for k in dims] + [-1 if v[k] is None else v[k] for k in NOTAS]
-                      + [preguntas.index(v["pregunta"]), v["texto"]])
+                      + [preguntas.index(v["pregunta"]), v["texto"], dolores.marcar_comentario(v)])
 
     datos = {
         "generado": _ahora(), "tabla": per[-1]["tabla"], "n_minimo": N_MINIMO,
@@ -175,7 +175,9 @@ def ensamblar():
     js = "window.DATOS=" + json.dumps(datos, ensure_ascii=False, separators=(",", ":")) + ";\n"
     SALIDA_JS.write_text(js, encoding="utf-8")
     # Los comentarios van aparte y el tablero los carga después de pintar
-    vjs = ("window.COMENTARIOS={\"campos\":" + json.dumps(dims + NOTAS + ["pregunta", "texto"])
+    # «dl» = máscara de dolores del comentario (bit i = dl_claves[i]); dl_propia = pregunta propia de cada dolor cerrado
+    vjs = ("window.COMENTARIOS={\"campos\":" + json.dumps(dims + NOTAS + ["pregunta", "texto", "dl"])
+           + ",\"dl_claves\":" + json.dumps(dolores.CLAVES) + ",\"dl_propia\":" + json.dumps(dolores.PROPIA)
            + ",\"filas\":" + json.dumps(vb, ensure_ascii=False, separators=(",", ":")) + "};\n")
     (SALIDA_JS.parent / "comentarios.js").write_text(vjs, encoding="utf-8")
     # Base descargable: un archivo por mes; el tablero carga solo los meses que se van a descargar

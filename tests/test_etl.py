@@ -219,7 +219,8 @@ def _textos_salida():
     """Comentarios de comentarios.js y columnas de texto abierto de la base descargable."""
     js = (TAB / "comentarios.js").read_text(encoding="utf-8")
     com = json.loads(js[len("window.COMENTARIOS="):].rstrip().rstrip(";"))
-    out = [f[-1] for f in com["filas"]]
+    it = com["campos"].index("texto")
+    out = [f[it] for f in com["filas"]]
     cols = _datos()["base"]["columnas"]
     abiertas = [cols.index(c) for c in ABIERTAS.values()]
     for p in (TAB / "base").glob("*.js"):
@@ -288,3 +289,17 @@ def test_cifras_cuadran_con_oracle(oracle):
         if proc == "Factura y pago":
             assert (s("prom"), s("det"), s("nps_val")) == (r.PROM, r.DET, r.NPSV)
             assert (s("ces1_4") + s("ces1_5"), sum(s(f"ces1_{i}") for i in range(1, 6))) == (r.CES1_OK, r.CES1_V)
+
+
+def test_marcar_comentario_dolores():
+    from etl import dolores
+    bit = lambda k: 1 << dolores.CLAVES.index(k)
+    fp = {"proceso": "Factura y pago", "nps": 3, "va": 0, "ces1": 5, "ces2": 5, "rap": 3, "seg": 3}
+    # dolor de texto: la expresión sobre el propio comentario
+    assert dolores.marcar_comentario(dict(fp, va=1, pregunta="SUGERENCIA", texto="La factura no me llega a tiempo")) == bit("no_llega")
+    # dolor cerrado: en su propia pregunta siempre; en el porqué solo si no es promotor
+    assert dolores.marcar_comentario(dict(fp, pregunta="VALORES_ACORDES_CLASIFICACION1", texto="Otro valor")) & bit("va_no")
+    assert dolores.marcar_comentario(dict(fp, pregunta="NPS_PROFUNDIZACION1", texto="Mal")) & bit("va_no")
+    assert not dolores.marcar_comentario(dict(fp, nps=10, pregunta="NPS_PROFUNDIZACION1", texto="Todo bien")) & bit("va_no")
+    # los dolores de cobranza no se marcan en factura y pago
+    assert not dolores.marcar_comentario(dict(fp, va=1, pregunta="SUGERENCIA", texto="Me llaman todo el día")) & bit("insisten")
