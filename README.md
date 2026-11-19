@@ -7,6 +7,41 @@ tabla desde las dos tablas que el proveedor alimenta cada mes (fuente BRM, ver a
 - Publicado: https://servidor.lan.qwertylab.dev/umm/FACTURACION-PAGOS-COBROS/tablero_Factura.html (reemplazó al tablero de NPS Factura de las encuestas 419/508).
 - Para abrirlo en el equipo basta con doble clic en `tablero/tablero_Factura.html`. Funciona sin servidor y sin internet; la descarga de la base sí necesita servidor.
 
+## Vistas
+
+Capturas de octubre 2026 (último mes cerrado; el tablero abre en el último mes disponible). Modo claro por defecto, con botón para oscuro.
+Se quitó de las capturas la sección «Lo que dicen los clientes» (comentarios literales); la pestaña **Voces** tampoco se muestra.
+
+**Resumen.** KPI (NPS, CSAT factura, CSAT pago, CSAT información), NPS mes a mes, alarmas, la tabla *Indicadores mes a mes* y los dolores del cliente.
+
+![Resumen](docs/img/resumen.png)
+
+**Alarmas.** Caídas y mejoras fuera del margen de error al 95 %, segmentos por debajo del total y dolores que suben; «Filtrar» aplica el segmento a todo el tablero.
+
+![Alarmas](docs/img/alarmas.png)
+
+**Factura**, **Pago** y **Cobranza**:
+
+![Factura](docs/img/factura.png)
+
+![Pago](docs/img/pago.png)
+
+![Cobranza](docs/img/cobranza.png)
+
+**Calidad de datos.** Chequeos del contrato de cada mes; los errores bloquean la corrida y los avisos se muestran aquí.
+
+![Calidad de datos](docs/img/calidad.png)
+
+**Descarga de la base** (Excel, CSV o Parquet, con los filtros activos):
+
+![Descargar base](docs/img/descarga.png)
+
+**Modo oscuro** y **celular** (menú abajo, KPI en una columna):
+
+![Modo oscuro](docs/img/resumen_oscuro.png)
+
+<img src="docs/img/movil.png" alt="Vista en celular" width="280">
+
 ## Corrida mensual
 
 ```bash
