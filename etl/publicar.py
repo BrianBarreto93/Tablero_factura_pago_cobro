@@ -24,8 +24,8 @@ ORIGEN = RAIZ / "tablero"
 BASE = "/incoming/compartido/proyectos_HTML/estaticos/UMM/FACTURACION-PAGOS-COBROS"
 URL = "https://servidor.lan.qwertylab.dev/umm/FACTURACION-PAGOS-COBROS/tablero_Factura.html"
 RESPALDO = RAIZ / "data" / "respaldo_publicado"
-# Credenciales SFTP prestadas del .env de claro_vista_360 (igual que los tableros CR y Soporte-FM)
-ENV = dotenv_values("/opt/apps/claro_vista_360/.env")
+# Credenciales SFTP_*_LAN: .env del proyecto (Windows) o, si no están, el de claro_vista_360 en el servidor
+ENV = {**dotenv_values("/opt/apps/claro_vista_360/.env"), **{k: v for k, v in dotenv_values(RAIZ / ".env").items() if v}}
 
 
 def _sin_errores():
@@ -53,6 +53,9 @@ def _remotos(s, d, pre=""):
 
 def main():
     _sin_errores()
+    faltan = [k for k in ("SFTP_HOST_LAN", "SFTP_PORT_LAN", "SFTP_USER_LAN", "SFTP_PASS_LAN") if not ENV.get(k)]
+    if faltan:
+        raise SystemExit(f"Faltan {faltan} en .env (ver .env.example)")
     archivos = {p.relative_to(ORIGEN).as_posix(): p for p in ORIGEN.rglob("*") if p.is_file()}
     t = paramiko.Transport((ENV["SFTP_HOST_LAN"], int(ENV["SFTP_PORT_LAN"])))
     t.connect(username=ENV["SFTP_USER_LAN"], password=ENV["SFTP_PASS_LAN"])

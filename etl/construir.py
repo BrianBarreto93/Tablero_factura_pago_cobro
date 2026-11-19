@@ -66,13 +66,13 @@ def procesar(periodos_pedidos=None, brm=True):
         sel = d.periodo == p
         sub, crudo_p = d[sel], crudo[sel]
         prev = DIR_PERIODOS / f"{_anterior(p)}.json"
-        n_ant = json.loads(prev.read_text())["n"] if prev.exists() else None
+        n_ant = json.loads(prev.read_text(encoding="utf-8"))["n"] if prev.exists() else None
         rep = repetidas[repetidas.PERIODO == p]
         chk = calidad.evaluar(crudo_p, sub, rep, n_ant)
 
         actual = DIR_PERIODOS / f"{p}.json"
         if actual.exists():
-            n_viejo = json.loads(actual.read_text())["n"]
+            n_viejo = json.loads(actual.read_text(encoding="utf-8"))["n"]
             if n_viejo != len(sub):
                 chk.append(calidad._chk("reemplazo", "aviso", "El corte reemplaza uno ya guardado",
                                         f"Antes {calidad.num(n_viejo)} encuestas, ahora {calidad.num(len(sub))}", len(sub)))
