@@ -896,8 +896,10 @@ function calcDolores(idx) {
   const totV = [a.n, a.prom, a.det, a.nps_val, aOk, aV, bOk, bV];
   const fila = (k, v) => {
     const r = v.map((x, j) => totV[j] - x), con = m1(v), sin = m1(r);
-    const c2 = fp ? pctDe(v[4], v[5]) : pctDe(v[6], v[7]), s2 = fp ? pctDe(r[4], r[5]) : pctDe(r[6], r[7]);
-    return {k, n: v[0], nSin: r[0], pct: a.n ? v[0] / a.n * 100 : 0, con, sin, c2, s2, pts: con != null && sin != null ? v[0] / a.n * (sin - con) : null};
+    const j = fp ? 4 : 6, c2 = pctDe(v[j], v[j + 1]), s2 = pctDe(r[j], r[j + 1]), v2 = totV[j + 1];
+    // pts2: lo que sube el segundo indicador si quienes viven el dolor calificaran como quienes no (sobre quienes lo responden)
+    return {k, n: v[0], nSin: r[0], pct: a.n ? v[0] / a.n * 100 : 0, con, sin, c2, s2, nSin2: r[j + 1], pct2: v2 ? v[j + 1] / v2 * 100 : 0,
+      pts: con != null && sin != null ? v[0] / a.n * (sin - con) : null, pts2: c2 != null && s2 != null ? v[j + 1] / v2 * (s2 - c2) : null};
   };
   const todas = DL.claves.map((k, i) => fila(k, s[i]));
   const alg = fp ? 'alguno_fp' : 'alguno_cob';
@@ -921,18 +923,14 @@ function vDolores() {
   const rango = dolEst.rango === 'mes' ? etqMeses(st.meses) : `${mesC(PERIODOS[0]).split('-')[0]} a ${MES[+PERIODOS[st.periodo].slice(4) - 1]} ${PERIODOS[st.periodo].slice(0, 4)}`;
   const orden = r.dol.filter(x => x.n).sort((a, b) => (b.n >= NMIN) - (a.n >= NMIN) || b.pts - a.pts);
   const maxPts = Math.max.apply(null, [1].concat(orden.filter(x => x.n >= NMIN).map(x => x.pts)));
-  const X = v => (v - min1) / (100 - min1) * 100;
+  const maxPts2 = Math.max.apply(null, [1].concat(orden.filter(x => x.n >= NMIN && x.pts2 != null).map(x => x.pts2)));
+  const X = v => (v - min1) / (100 - min1) * 100, X2 = v => v;
   const techo = alguno && alguno.sin != null && alguno.nSin >= NMIN ? alguno.sin : null;
+  const techo2 = alguno && alguno.s2 != null && alguno.nSin2 >= NMIN ? alguno.s2 : null;
   const cab = tot.m1 == null || !alguno ? '' : `
     <div class="dol-hero">
-      <div class="dh-num"><span>${n1} hoy</span><b>${GRAF.cuenta(tot.m1, 1)}${s1}</b></div>
-      <div class="dh-pista" ${tipAttr(`<div class="t">Techo teórico</div>Las ${f0(alguno.nSin)} encuestas que no muestran ningún dolor dan ${n1} de ${techo == null ? '—' : f1(techo) + s1}. Si todos calificaran así, el ${n1} subiría ${techo == null ? '—' : f1(techo - tot.m1)} ${u1}.`)}>
-        <div class="riel">${min1 < 0 ? '<span class="cero" style="left:50%"></span>' : ''}
-          ${techo == null ? '' : `<span class="flujo" style="left:${X(Math.min(tot.m1, techo))}%;width:${Math.abs(X(techo) - X(tot.m1))}%" data-an="ancho"></span><span class="pt fin" style="left:${X(techo)}%" data-an="desliza" data-desde="${X(tot.m1)}%"></span>`}
-          <span class="pt hoy" style="left:${X(tot.m1)}%"></span>${marcaElegido(orden, X)}</div>
-        <div class="escala"><span>${min1 < 0 ? '−100' : '0'}</span><span>${min1 < 0 ? '0' : '50'}</span><span>100</span></div></div>
-      <div class="dh-num der"><span>Sin ningún dolor</span><b>${techo == null ? '—' : GRAF.cuenta(techo, 1) + s1}</b></div>
-      <div class="dh-pts"><b>${techo == null ? '—' : GRAF.cuenta(techo - tot.m1, 1, {signo: true})}</b><span>${u1} de ${n1} en juego</span></div>
+      ${filaHero({nom: n1, hoy: tot.m1, techo, nSin: alguno.nSin, X, min: min1, suf: s1, u: u1, orden, campo: 'sin', m: ''})}
+      ${tot.m2 == null ? '' : filaHero({nom: n2, hoy: tot.m2, techo: techo2, nSin: alguno.nSin2, X: X2, min: 0, suf: ' %', u: 'pp', orden, campo: 's2', m: 'c'})}
       <p class="dh-pie">${f1(alguno.pct)} % de las encuestas (${f0(alguno.n)} de ${f0(tot.n)}) muestra al menos un dolor. Su ${n1} es ${f1(alguno.con)}${s1}${alguno.c2 != null ? ` y su ${n2} ${f1(alguno.c2)} %` : ''}.</p>
     </div>`;
   const filasH = orden.map((x, i) => {
@@ -940,8 +938,9 @@ function vDolores() {
     const tipN = `<div class="t">${esc(tc[0])}</div>${n1} con el dolor: <b>${f1(x.con)}${s1}</b> (n ${f0(x.n)})<br>${n1} sin el dolor: <b>${f1(x.sin)}${s1}</b> (n ${f0(x.nSin)})<br>Brecha: ${f1(br)} ${u1}`;
     const tipC = `<div class="t">${n2} · ${esc(tc[0])}</div>Con el dolor: <b>${x.c2 == null ? '—' : f1(x.c2) + ' %'}</b><br>Sin el dolor: <b>${x.s2 == null ? '—' : f1(x.s2) + ' %'}</b>${x.c2 != null && x.s2 != null ? `<br>Brecha: ${f1(x.s2 - x.c2)} pp` : ''}`;
     const tipP = `<div class="t">Si este dolor desapareciera</div>Quienes lo viven (${f1(x.pct)} %) pasarían a calificar como quienes no lo viven: el ${n1} iría de ${f1(tot.m1)} a ${f1(x.sin)}.<br>${f1(x.pct)} % × ${f1(br)} ${u1} de brecha = <b>${fpp(x.pts)} ${u1}</b>`;
+    const tipP2 = x.pts2 == null ? '' : `<div class="t">Si este dolor desapareciera · ${n2}</div>Quienes lo viven (${f1(x.pct2)} % de quienes responden ${n2}) pasarían a calificar como quienes no lo viven: el ${n2} iría de ${f1(tot.m2)} % a ${f1(x.s2)} %.<br>${f1(x.pct2)} % × ${f1(x.s2 - x.c2)} pp de brecha = <b>${fpp(x.pts2)} pp</b>`;
     const sel = dolEst.sel === x.k, voz = dolEst.voz === x.k;
-    return `<li class="dol${poca ? ' poca' : ''}${sel ? ' dol-on' : ''}" data-k="${x.k}"${x.sin == null ? '' : ` data-x="${X(x.sin).toFixed(2)}" data-et="${esc(f1(x.sin) + s1 + ' sin este dolor')}"`}>
+    return `<li class="dol${poca ? ' poca' : ''}${sel ? ' dol-on' : ''}" data-k="${x.k}"${x.sin == null ? '' : ` data-x="${X(x.sin).toFixed(2)}" data-et="${esc(f1(x.sin) + s1 + ' sin este dolor')}"`}${x.s2 == null ? '' : ` data-xc="${X2(x.s2).toFixed(2)}" data-etc="${esc(f1(x.s2) + ' % sin este dolor')}"`}>
       <span class="rk">${String(i + 1).padStart(2, '0')}</span>
       <div class="qu"><span class="mom" ${tipAttr('Regla: ' + DL.reglas[x.k][2])}>${esc(DL.reglas[x.k][1])}</span>
         <div class="dol-tt"><button type="button" class="dol-t" aria-pressed="${sel}">${esc(tc[0])}</button>${botonVoces(x.k, voz)}</div><q>${esc(tc[1])}</q></div>
@@ -949,15 +948,16 @@ function vDolores() {
       ${pista(x.con, x.sin, min1, tot.m1, s1, tipN, i)}
       ${pista(x.c2, x.s2, 0, tot.m2, ' %', tipC, i + 1)}
       <div class="gana" ${tipAttr(tipP)}><b>${x.pts == null ? '—' : GRAF.cuenta(x.pts, 1, {signo: true})}</b><small>${u1}</small><span class="barrita"><i style="width:${poca || x.pts == null ? 0 : Math.max(0, x.pts) / maxPts * 100}%" data-an="ancho" data-i="${i + 2}"></i></span></div>
+      <div class="gana ces"${tipP2 ? ' ' + tipAttr(tipP2) : ''}><b>${x.pts2 == null ? '—' : GRAF.cuenta(x.pts2, 1, {signo: true})}</b><small>pp</small><span class="barrita"><i style="width:${poca || x.pts2 == null ? 0 : Math.max(0, x.pts2) / maxPts2 * 100}%" data-an="ancho" data-i="${i + 3}"></i></span></div>
       ${voz ? vocesDolor(x.k) : ''}
     </li>`;
   }).join('');
   const segProc = st.proceso == null ? `<div class="seg" role="group" aria-label="Proceso de los dolores" id="dol-p">${[FP, COB].map(p => `<button type="button" data-p="${p}" aria-pressed="${dolEst.proc === p}">${PROC[p]}</button>`).join('')}</div>` : '';
   return `<section class="panel dolores" id="dolores"><header><h2>Dolores del cliente</h2>
       <div class="herr">${segProc}<div class="seg" role="group" aria-label="Periodo de los dolores" id="dol-r"><button type="button" data-r="mes" aria-pressed="${dolEst.rango === 'mes'}">${st.meses.length > 1 ? 'Meses elegidos' : 'Mes'}</button><button type="button" data-r="acum" aria-pressed="${dolEst.rango === 'acum'}">Año corrido</button></div></div>
-      <p class="sub">${PROC[dolEst.proc]} · ${st.negocio == null ? 'Hogar + Móvil' : NEG[st.negocio]} · ${rango}. Lo que responden y cuentan los clientes, cruzado con su ${n1} y su ${n2}. Arriba, el dolor que más ${u1} de ${n1} le quita a la nota.</p></header>
+      <p class="sub">${PROC[dolEst.proc]} · ${st.negocio == null ? 'Hogar + Móvil' : NEG[st.negocio]} · ${rango}. Lo que responden y cuentan los clientes, cruzado con su ${n1} y su ${n2}. Arriba, el dolor que más ${u1} de ${n1} le quita a la nota; al lado, lo que recuperaría el ${n2}.</p></header>
     ${cab}
-    ${leyendaDolores('Lo vive', n1, n2, `${n1} que recupera`)}
+    ${leyendaDolores('Lo vive', n1, n2, `${n1} que recupera`, `${n2} que recupera`)}
     <ol class="dol-lista${dolEst.sel && orden.some(x => x.k === dolEst.sel) ? ' con-sel' : ''}">${filasH || '<li class="vacio">Sin encuestas con estos filtros</li>'}</ol>
     <p class="nota dol-nota">${fp ? 'Cuatro dolores salen de la respuesta a la encuesta (valores que no cuadran, entender la factura de 1 a 3, pagar de 1 a 3 y seguridad o rapidez en 1) y tres de lo que cuenta el cliente en sus comentarios.' : 'La claridad sale de la respuesta (1 a 3); el resto, de lo que cuenta el cliente en sus comentarios.'} Pasa el cursor por la etiqueta de cada dolor para ver su regla; clic en un dolor para resaltarlo y en el globo para leer lo que más repiten quienes lo viven. Los puntos son teóricos: suponen que quien deja de vivir el dolor califica igual que quien nunca lo vivió. Como un cliente puede tener varios dolores, las filas no se suman; el número de arriba cuenta cada encuesta una sola vez.</p>
   </section>`;
@@ -966,17 +966,32 @@ function vDolores() {
 // ------------------------------------------------------------------ dolores: resaltar uno y leer lo que más repiten
 // Encabezado de la lista: el nombre del indicador grande y debajo la clave de los puntos, centrado sobre su columna
 const pareja = (c, t) => `<span><i class="pt ${c}"></i>${t}</span>`;
-const leyendaDolores = (vive, n1, n2, recupera) => {
+const leyendaDolores = (vive, n1, n2, recupera, recupera2) => {
   const pts = `<small>${pareja('con', 'Con el dolor')}${pareja('sin', 'Sin el dolor')}<span><i class="ref"></i>Total</span></small>`;
   return `<div class="dol-ley" aria-hidden="true"><span></span><span class="dl-t"><b>${vive}</b><small>de las encuestas</small></span>
-    <span class="dl-t"><b>${n1}</b>${pts}</span><span class="dl-t"><b>${n2}</b>${pts}</span><span class="dl-t"><b>${recupera}</b><small>si el dolor desaparece</small></span></div>`;
+    <span class="dl-t"><b>${n1}</b>${pts}</span><span class="dl-t"><b>${n2}</b>${pts}</span><span class="dl-t"><b>${recupera}</b><small>si el dolor desaparece</small></span><span class="dl-t"><b>${recupera2}</b><small>si el dolor desaparece</small></span></div>`;
 };
+// Una fila del recuadro de arriba (primer o segundo indicador): hoy → sin ningún dolor, y los puntos en juego.
+// m = sufijo de data-x/data-et del dolor ('' el primero, 'c' el segundo)
+function filaHero({nom, hoy, techo, nSin, X, min, suf, u, orden, campo, m}) {
+  const tip = `<div class="t">Techo teórico · ${nom}</div>Las ${f0(nSin)} encuestas que no muestran ningún dolor dan ${nom} de ${techo == null ? '—' : f1(techo) + suf}. Si todos calificaran así, el ${nom} subiría ${techo == null ? '—' : f1(techo - hoy)} ${u}.`;
+  return `<div class="dh-fila">
+      <div class="dh-num"><span>${nom} hoy</span><b>${GRAF.cuenta(hoy, 1)}${suf}</b></div>
+      <div class="dh-pista" data-m="${m}" ${tipAttr(tip)}>
+        <div class="riel">${min < 0 ? '<span class="cero" style="left:50%"></span>' : ''}
+          ${techo == null ? '' : `<span class="flujo" style="left:${X(Math.min(hoy, techo))}%;width:${Math.abs(X(techo) - X(hoy))}%" data-an="ancho"></span><span class="pt fin" style="left:${X(techo)}%" data-an="desliza" data-desde="${X(hoy)}%"></span>`}
+          <span class="pt hoy" style="left:${X(hoy)}%"></span>${marcaElegido(orden, X, campo, suf)}</div>
+        <div class="escala"><span>${min < 0 ? '−100' : '0'}</span><span>${min < 0 ? '0' : '50'}</span><span>100</span></div></div>
+      <div class="dh-num der"><span>Sin ningún dolor</span><b>${techo == null ? '—' : GRAF.cuenta(techo, 1) + suf}</b></div>
+      <div class="dh-pts"><b>${techo == null ? '—' : GRAF.cuenta(techo - hoy, 1, {signo: true})}</b><span>${u} de ${nom} en juego</span></div>
+    </div>`;
+}
 const ICO_VOZ = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7.5a2.5 2.5 0 0 1-2.5 2.5H10.5L6.6 19.7c-.5.4-1.1 0-1.1-.6v-2.6A2.5 2.5 0 0 1 4 14z"/><path d="M8.5 9h7M8.5 12.2h4.5"/></svg>';
 const botonVoces = (k, abierto) => `<button type="button" class="dol-com" aria-expanded="${abierto}" aria-label="Ver lo que más repiten quienes viven «${esc(DOLOR[k][0])}»" ${tipAttr('Lo que más repiten quienes viven este dolor')}>${ICO_VOZ}</button>`;
 // Punto del dolor elegido sobre el riel del recuadro de arriba: hasta dónde llegaría el indicador sin ese dolor
-function marcaElegido(orden, X) {
-  const x = dolEst.sel ? orden.find(d => d.k === dolEst.sel) : null, ok = x && x.sin != null;
-  return `<span class="pt elegido" style="left:${ok ? X(x.sin) : 50}%"${ok ? '' : ' hidden'}></span><span class="elegido-et" style="left:${ok ? X(x.sin) : 50}%"${ok ? '' : ' hidden'}>${ok ? esc(f1(x.sin) + (dolEst.proc === FP ? '' : ' %') + ' sin este dolor') : ''}</span>`;
+function marcaElegido(orden, X, campo, suf) {
+  const x = dolEst.sel ? orden.find(d => d.k === dolEst.sel) : null, ok = x && x[campo] != null;
+  return `<span class="pt elegido" style="left:${ok ? X(x[campo]) : 50}%"${ok ? '' : ' hidden'}></span><span class="elegido-et" style="left:${ok ? X(x[campo]) : 50}%"${ok ? '' : ' hidden'}>${ok ? esc(f1(x[campo]) + suf + ' sin este dolor') : ''}</span>`;
 }
 // Comentarios de quienes viven el dolor k, con los filtros y el periodo de la caja de dolores
 function comDolor(k) {
@@ -1014,18 +1029,21 @@ function pintarSel(sec, anim) {
     li.classList.toggle('dol-on', on); li.querySelector('.dol-t').setAttribute('aria-pressed', on);
     if (on && anim && anima()) Motion.animate(li, {scale: [.98, 1]}, {type: 'spring', bounce: .45, duration: .5});
   });
-  const m = sec.querySelector('.dh-pista .elegido'), et = sec.querySelector('.dh-pista .elegido-et');
   const li = dolEst.sel ? sec.querySelector(`.dol[data-k="${dolEst.sel}"]`) : null;
-  if (!m || !et) return;
-  if (li && li.dataset.x) {
-    const nuevo = m.hidden;
-    m.hidden = et.hidden = false; m.style.left = et.style.left = li.dataset.x + '%'; et.textContent = li.dataset.et;
-    // WAAPI y no Motion: el marcador ya lleva translate(-50%) y Motion reemplazaría todo el transform
-    if (nuevo && anim && anima()) {
-      m.animate([{transform: 'translate(-50%,-50%) scale(0)'}, {transform: 'translate(-50%,-50%) scale(1)'}], {duration: 480, easing: 'cubic-bezier(.34,1.56,.64,1)'});
-      et.animate([{opacity: 0, transform: 'translate(-50%,6px)'}, {opacity: 1, transform: 'translate(-50%,0)'}], {duration: 300, easing: 'ease-out'});
-    }
-  } else m.hidden = et.hidden = true;
+  // Un marcador por riel del recuadro de arriba: el primero lee data-x/data-et del dolor, el segundo data-xc/data-etc
+  sec.querySelectorAll('.dh-pista').forEach(p => {
+    const m = p.querySelector('.elegido'), et = p.querySelector('.elegido-et'), c = p.dataset.m || '';
+    if (!m || !et) return;
+    if (li && li.dataset['x' + c]) {
+      const nuevo = m.hidden;
+      m.hidden = et.hidden = false; m.style.left = et.style.left = li.dataset['x' + c] + '%'; et.textContent = li.dataset['et' + c];
+      // WAAPI y no Motion: el marcador ya lleva translate(-50%) y Motion reemplazaría todo el transform
+      if (nuevo && anim && anima()) {
+        m.animate([{transform: 'translate(-50%,-50%) scale(0)'}, {transform: 'translate(-50%,-50%) scale(1)'}], {duration: 480, easing: 'cubic-bezier(.34,1.56,.64,1)'});
+        et.animate([{opacity: 0, transform: 'translate(-50%,6px)'}, {opacity: 1, transform: 'translate(-50%,0)'}], {duration: 300, easing: 'ease-out'});
+      }
+    } else m.hidden = et.hidden = true;
+  });
 }
 function ponerVoces(sec, anim) {
   const k = dolEst.voz; if (!k) return;
